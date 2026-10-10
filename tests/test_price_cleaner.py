@@ -189,7 +189,8 @@ def test_service_fetches_orders_and_trades_then_caches(tmp_path):
     cache = JsonPriceCache(tmp_path / "p.json")
     client = FakeClient([order(p) for p in BURSTON_ASKS], stats_payload(BURSTON_TRADES))
     stats = PriceService(client, cache).get_price("burston_prime_blueprint")
-    assert client.calls == ["/orders/item/burston_prime_blueprint", "/items/burston_prime_blueprint/statistics"]
+    # Fetched concurrently, so order is not fixed.
+    assert sorted(client.calls) == ["/items/burston_prime_blueprint/statistics", "/orders/item/burston_prime_blueprint"]
     assert stats.price == 4.0 and not stats.stale
     assert cache.get("burston_prime_blueprint") == stats
 

@@ -183,9 +183,11 @@ def stage_cv(resolver: EntityResolver) -> dict:
         for label, img in [("Raw grayscale", gray), ("Global Otsu only", naive), ("VoidTrace cleaning", clean)]:
             text = " ".join(cv_cleaner.ocr(img).split())
             res = resolver.resolve(text)
+            truth_words = set(REWARDS[i].lower().split())
+            junk = [w for w in re.findall(r"\S+", text.lower()) if w not in truth_words]
             variants.append({
                 "label": label, "img": png_uri(img), "ocr": text,
-                "match": res.item.name if res.item else None, "score": res.score,
+                "match": res.item.name if res.item else None, "score": res.score, "junk": len(junk),
             })
         rows.append({"truth": REWARDS[i].title(), "variants": variants})
     zoom = crop(marked, Box(band_box.x - 60, band_box.y - 140, band_box.w + 120, band_box.h + 220))
@@ -336,6 +338,97 @@ def stage_live(resolver: EntityResolver, market: list[dict]) -> dict:
         "key_lines": key_lines, "n_lines": len(lines), "window": t_close - t_open, "prices": prices,
     }
 
+
+# --- live test 2 ----------------------------------------------------------------------
+
+LIVE2_SHOT = Path(__file__).parent / "docs" / "live_test2_2026-10-10.png"
+LIVE2_TRUTH = ["Forma Blueprint", "Aksomati Prime Receiver", "Kestrel Prime Blade", "Steflos Prime Receiver"]
+# Measured on 2026-10-10 with tools/debug_log_probe.py: 30 s of play, 218 lines seen by both sources.
+PROBE = {"lines": 218, "median": 0.10, "max": 11.22}
+# Measured on 2026-10-10 before the speed changes (sequential OCR and price requests).
+TIMING_BEFORE = {"delay": 1.5, "ocr": 2.33, "prices": 5.5}
+
+
+def stage_live2(resolver: EntityResolver, offline: bool) -> dict:
+    from rapidfuzz import fuzz, process, utils
+
+    from voidtrace.price_cleaner import JsonPriceCache
+    from voidtrace.text_cleaner import normalize
+
+    shot = cv2.imread(str(LIVE2_SHOT))
+    names = [item.name for item in resolver.items]
+    t0 = time.perf_counter()
+    texts = cv_cleaner.read_reward_texts(shot)
+    ocr_s = time.perf_counter() - t0
+    rows = []
+    for raw, truth in zip(texts, LIVE2_TRUTH):
+        old = process.extractOne(normalize(raw), names, scorer=fuzz.WRatio, processor=utils.default_process)
+        new = resolver.resolve(raw)
+        rows.append({"ocr": " ".join(raw.split()), "truth": truth, "old": old[0] if old else None,
+                     "old_score": old[1] if old else 0, "new": new.item.name if new.item else None,
+                     "new_score": new.score})
+    timing = None
+    if not offline:
+        import tempfile
+
+        prices = PriceService(MarketClient(), JsonPriceCache(Path(tempfile.mkdtemp()) / "p.json"), max_age=0)
+        pipeline = RewardPipeline(resolver, prices)
+        t0 = time.perf_counter()
+        cards = pipeline.read(shot)
+        cards_s = time.perf_counter() - t0
+        pipeline.price_cards(cards)
+        timing = {"cards": cards_s, "prices": time.perf_counter() - t0}
+    return {"shot": png_uri(shot, 1100, quality_jpeg=True), "rows": rows, "ocr_s": ocr_s, "timing": timing}
+
+
+def render_live2(live2: dict) -> str:
+    rows = []
+    for r in live2["rows"]:
+        old_ok, new_ok = r["old"] == r["truth"], r["new"] == r["truth"]
+        rows.append(
+            f'<tr><td class="mono">{esc(r["ocr"][:48])}</td><td>{esc(r["truth"])}</td>'
+            f'<td><span class="pill {"ok" if old_ok else "no"}">{"✓" if old_ok else "✗"} {esc(r["old"])}</span> {r["old_score"]:.0f}</td>'
+            f'<td><span class="pill {"ok" if new_ok else "no"}">{"✓" if new_ok else "✗"} {esc(r["new"] or "rejected")}</span> {r["new_score"]:.0f}</td></tr>'
+        )
+    b = TIMING_BEFORE
+    t = live2["timing"]
+    before_total = b["delay"] + b["ocr"] + b["prices"]
+    timing_rows = (
+        f'<tr><td>Wait for the cards to fade in</td><td>{b["delay"]:.1f} s</td><td>1.0 s</td></tr>'
+        f'<tr><td>OCR, 4 slots</td><td>{b["ocr"]:.1f} s, one after another</td><td>{live2["ocr_s"]:.1f} s, in parallel</td></tr>'
+    )
+    if t:
+        timing_rows += (
+            f'<tr><td>Cards on screen (names, ducats)</td><td>after all prices</td><td>{1.0 + t["cards"]:.1f} s</td></tr>'
+            f'<tr><td>All prices filled in</td><td>{before_total:.1f} s</td><td>{1.0 + t["prices"]:.1f} s</td></tr>'
+        )
+    return f"""<section>
+<div class="stage-head"><span class="eyebrow">Live test 2 · 2026-10-10</span><h2>The trigger was late, and the matcher was confidently wrong</h2></div>
+<p>The second run went worse. Cards appeared with 3 seconds left on the 15-second timer, and in the next mission
+they appeared on the Mission Complete screen filled with text OCR'd from a terminal window. Squad names are pixelated.</p>
+<figure><img src="{live2['shot']}" alt="Relic reward screen where the overlay cards arrived late, one reading Unreadable">
+<figcaption>Cards with 3 seconds left. "My At Ccivet" was the old overlay printing raw OCR for Aksomati Prime Receiver.</figcaption></figure>
+<p class="problem"><b>The log file is buffered.</b> Warframe writes <code>EE.log</code> in chunks. A probe that listened to the
+game's live debug output and tailed the file at the same time saw {PROBE['lines']} lines arrive in the file a median
+{PROBE['median']:.1f} s later, but up to <b>{PROBE['max']:.1f} s</b> later. In the Mission Complete run, the screen's open and close
+lines landed together, 15 s late; VoidTrace cleared the overlay, then captured whatever was on screen.</p>
+<p><b>Fix.</b> VoidTrace now reads the game's live debug output, the channel that tools like DebugView and WFInfo listen to,
+and falls back to the file only when another program holds it. A trigger is dropped if the same batch already contains
+the close, or if it is more than 8 s behind the newest line. A close during the capture delay cancels the capture, and
+nothing is captured unless Warframe is the active window.</p>
+<p class="problem"><b>Wrong matches with high scores.</b> RapidFuzz's WRatio falls back to partial matching on messy text,
+so every name sharing "Prime Blade" or "Prime Link" scored the same 85.5. Re-running OCR on this screenshot:</p>
+<div class="scroll"><table><thead><tr><th>OCR read</th><th>Actual item</th><th>Before (WRatio)</th><th>Now</th></tr></thead>
+<tbody>{''.join(rows)}</tbody></table></div>
+<p><b>Fix.</b> The score is now the average of token-set and plain similarity, calibrated on 22 labelled reads (both live
+screenshots, the synthetic screen and unit cases): all 22 correct, correct matches 67–100, the best junk match 43,
+cutoff 60. A read that fits several names whole, like "Nekros Prime", is marked uncertain.</p>
+<p class="problem"><b>Too slow even when on time.</b> Everything ran one step after another.</p>
+<div class="scroll"><table><thead><tr><th>Step after the trigger</th><th>Before</th><th>Now</th></tr></thead>
+<tbody>{timing_rows}</tbody></table></div>
+<p>Cards now show names and ducats as soon as OCR finishes, and each price fills in as it arrives. Both price
+requests per item, and all items, run concurrently within Warframe.Market's rate limit.</p>
+</section>"""
 
 # --- stage 5: end to end ----------------------------------------------------------------
 
@@ -508,7 +601,7 @@ after a fixed 12 seconds.</p>
 </section>"""
 
 
-def render(log, cv, text, market, overlay, live) -> str:
+def render(log, cv, text, market, overlay, live, live2) -> str:
     h = []
     h.append('<title>VoidTrace Prototype</title>')
     h.append('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>')
@@ -527,6 +620,7 @@ the cleaning step.</p>
           overlay ◄─ 5 PyQt6 click-through window ◄─ 4 trade history + cleaned listings</div>
 </header>""")
     h.append(render_live(live))
+    h.append(render_live2(live2))
 
     # Stage 1
     top = log["categories"][0][1] or 1
@@ -571,6 +665,15 @@ debounced, and the tailer reopens the file when the game recreates it on launch.
     naive_wins = sum(1 for r in cv["rows"] for v in r["variants"] if v["label"] == "Global Otsu only" and v["match"] == r["truth"])
     raw_wins = sum(1 for r in cv["rows"] for v in r["variants"] if v["label"] == "Raw grayscale" and v["match"] == r["truth"])
     n = len(cv["rows"])
+
+    def junk(label: str) -> int:
+        return sum(v["junk"] for r in cv["rows"] for v in r["variants"] if v["label"] == label)
+
+    if naive_wins == wins:
+        matcher_note = ("<p>Global Otsu also resolves every name here, because the stage 3 matcher tolerates junk words."
+                        " The difference shows in how much junk OCR has to wade through.</p>")
+    else:
+        matcher_note = ""
     h.append(f"""<section>
 <div class="stage-head"><span class="eyebrow">Stage 2 · Vision and OCR</span><h2>Reading text through bloom and particles</h2></div>
 <p>The crop boxes come from the reward screen's 1920×1080 reference layout, scaled by screen height, so they land on
@@ -582,10 +685,11 @@ particles. Blue: reward-name band; orange: per-card crops.</figcaption></figure>
 on the "text" side. The fix flattens the lighting first with a morphological top-hat (or black-hat on light themes), which
 removes anything wider than a letter stroke. Otsu then separates text from everything else.</p>
 <div class="stats">
-<div class="stat bad"><span class="v">{raw_wins} / {n}</span><span class="k">correct with raw grayscale</span></div>
-<div class="stat bad"><span class="v">{naive_wins} / {n}</span><span class="k">correct with global Otsu only</span></div>
-<div class="stat good"><span class="v">{wins} / {n}</span><span class="k">correct with VoidTrace cleaning</span></div>
+<div class="stat {'good' if raw_wins == n else 'bad'}"><span class="v">{raw_wins} / {n}</span><span class="k">correct with raw grayscale · {junk('Raw grayscale')} junk words</span></div>
+<div class="stat {'good' if naive_wins == n else 'bad'}"><span class="v">{naive_wins} / {n}</span><span class="k">correct with global Otsu only · {junk('Global Otsu only')} junk words</span></div>
+<div class="stat {'good' if wins == n else 'bad'}"><span class="v">{wins} / {n}</span><span class="k">correct with VoidTrace cleaning · {junk('VoidTrace cleaning')} junk words</span></div>
 </div>
+{matcher_note}
 {''.join(rows)}
 <p>Every cell is real Tesseract 5 output, run through the stage 3 matcher.</p>
 </section>""")
@@ -683,8 +787,11 @@ always-on-top window that ignores mouse input, so clicks pass through to Warfram
 100% UI scale. Other resolutions, UI scales, themes and non-English clients are untested.</li>
 <li><b>The name crop also catches item art.</b> The crop band reaches above one-line names into the item picture, which
 adds junk to the OCR text. Fuzzy matching absorbs it today; detecting the text row first would make it robust.</li>
-<li><b>New card position not yet seen live.</b> Cards now sit below the squad's pick list and close with the screen;
-both are covered by tests but need a second live run.</li>
+<li><b>Test 2 fixes not yet seen live.</b> The live debug-output trigger, stale-trigger guard, foreground check,
+progressive cards and new matcher are covered by tests and measured offline; they need a third live run, as does the
+card position below the squad's pick list.</li>
+<li><b>One listener at a time.</b> Windows lets only one program read debug output. With WFInfo or DebugView open,
+VoidTrace falls back to the buffered log file and can be late again.</li>
 <li><b>Trade history uses a legacy endpoint.</b> Closed-trade statistics come from Warframe.Market's v1 API. If it
 goes away, prices fall back to the cleaned listings automatically.</li>
 <li><b>Truncated reads are ambiguous.</b> When OCR returns only part of a name, several items fit. These are flagged, not solved.</li>
@@ -718,9 +825,11 @@ def main(argv=None) -> int:
     overlay = stage_overlay(cv.pop("frame_raw"), resolver, args.offline)
     print("live test: real screenshot + log excerpt...")
     live = stage_live(resolver, market)
+    print("live test 2: misreads + timing...")
+    live2 = stage_live2(resolver, args.offline)
 
     report = OUT / "report.html"
-    report.write_text(render(log, cv, text, market, overlay, live), encoding="utf-8")
+    report.write_text(render(log, cv, text, market, overlay, live, live2), encoding="utf-8")
     print(f"wrote {report} ({report.stat().st_size / 1024:.0f} KB)")
     return 0
 

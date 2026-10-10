@@ -136,3 +136,39 @@ def test_load_items_falls_back_to_stale_cache_when_offline(tmp_path):
 def test_load_items_raises_when_offline_without_cache(tmp_path):
     with pytest.raises(ConnectionError):
         load_items(FakeClient(error=ConnectionError("offline")), tmp_path / "items.json")
+
+
+# Real OCR from the second live screenshot (2026-10-10 19:27). With WRatio these resolved to
+# Afuris Prime Link and Akstiletto Prime Blueprint: every name sharing "Prime ..." tied at 85.5.
+DISTRACTORS = [
+    Item("Aksomati Prime Receiver", "aksomati_prime_receiver", 45),
+    Item("Aksomati Prime Barrel", "aksomati_prime_barrel", 15),
+    Item("Afuris Prime Link", "afuris_prime_link", 15),
+    Item("Afentis Prime Blade", "afentis_prime_blade", 15),
+    Item("Kestrel Prime Blade", "kestrel_prime_blade", 15),
+    Item("Kestrel Prime Grip", "kestrel_prime_grip", 15),
+    Item("Akstiletto Prime Blueprint", "akstiletto_prime_blueprint", 15),
+    Item("Soma Prime Receiver", "soma_prime_receiver", 15),
+    Item("Saryn Prime Blueprint", "saryn_prime_blueprint", 15),
+    Item("Saryn Prime Systems Blueprint", "saryn_prime_systems_blueprint", 15),
+    Item("Ash Prime Systems Blueprint", "ash_prime_systems_blueprint", 15),
+]
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ('| "\\n7\nARSomat Prime neaeiver|\ny mi\n', "Aksomati Prime Receiver"),
+        ("Restrel Prime Bia\n", "Kestrel Prime Blade"),
+        ("* SARYN PRIME SYSTEMS BLUEPRINT -", "Saryn Prime Systems Blueprint"),
+    ],
+)
+def test_live_misreads_resolve_correctly(raw, expected):
+    res = EntityResolver(ITEMS + DISTRACTORS).resolve(raw)
+    assert res.item is not None and res.item.name == expected
+
+
+@pytest.mark.parametrize("raw", ["ly Wv Wards", "Oading Item List Latching Users", "Appdata Local Warfra Script Inf"])
+def test_end_screen_and_terminal_text_is_rejected(raw):
+    # What the overlay read off the Mission Complete screen and the VS Code terminal in live test 2.
+    assert EntityResolver(ITEMS + DISTRACTORS).resolve(raw).item is None

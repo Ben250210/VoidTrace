@@ -68,8 +68,23 @@ One real 4-player relic run on a 2560x1600 laptop (`docs/live_test_2026-10-10.pn
 - **Fixed:** prices came from the median asking price and were too high (Burston Prime Blueprint showed 14.5p,
   traded near 4p). They now come from closed trades. The cards covered the squad's pick list and now sit below it.
 
+## Live test 2 (2026-10-10)
+
+Cards arrived with 3 s left, then on the Mission Complete screen with OCR of a terminal window.
+
+- **EE.log is buffered.** `tools/debug_log_probe.py` measured file lines arriving a median 0.1 s but up to
+  11.2 s after the game's live debug output. VoidTrace now reads that debug output (`voidtrace/debug_log.py`,
+  the channel DebugView and WFInfo use) and falls back to the file only if another program holds it.
+- **Stale triggers.** An open that arrives with its close, or > 8 s behind the newest line, is dropped; a close
+  during the capture delay cancels the capture; nothing is captured unless Warframe is the active window.
+- **Confident wrong matches.** WRatio scored every "Prime ..." name 85.5 on messy text (Kestrel Prime Blade →
+  Akstiletto Prime Blueprint). The matcher now averages token-set and plain similarity, cutoff 60, calibrated on
+  22 labelled reads.
+- **Speed.** Parallel OCR, concurrent price requests and progressive cards: names on screen ~1.3 s after
+  capture, prices ~3.5 s (was ~9.5 s).
+
 ## Still unverified
 
 - Other resolutions, UI scales, themes and non-English clients.
-- The new card position, which needs a second live run.
-- The 1.5 s capture delay is a starting value (`--delay`).
+- The live-test-2 fixes and the card position below the squad list, which need a third live run.
+- The 1.0 s capture delay is a starting value (`--delay`).

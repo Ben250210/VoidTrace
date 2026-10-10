@@ -165,18 +165,41 @@ class RewardScreenEvent:
     kind: str = "open"  # "open" when the reward screen appears, "close" when it shuts down
 
 
+# A trigger whose game timestamp is this far behind the newest line in the same batch arrived
+# too late to act on (EE.log is written in chunks; the second live test saw 11-15 s delays).
+STALE_TRIGGER_S = 8.0
+
+
+def game_time(line: str) -> Optional[float]:
+    """Seconds-since-launch prefix of a Warframe log line, or None."""
+    head = line.split(" ", 1)[0]
+    try:
+        return float(head)
+    except ValueError:
+        return None
+
+
 class LogWatcher:
-    """Runs a LogTailer on a daemon thread and calls `on_event` for each accepted match."""
+    """Reads a line source on a daemon thread and calls `on_event` for reward-screen opens and closes.
+
+    The source is a LogTailer (EE.log) or a DebugLogSource (live debug output); anything with
+    poll() -> list[str] and close() works. An open trigger is dropped as stale when the same batch
+    already contains the screen's close, or when it is STALE_TRIGGER_S behind the batch's newest line.
+    """
 
     def __init__(
         self,
-        path: Path | str,
+        path: Optional[Path | str],
         on_event: Callable[[RewardScreenEvent], None],
         debounce: float = 5.0,
         poll_interval: float = 0.05,
         clock: Callable[[], float] = time.monotonic,
+        source=None,
     ) -> None:
-        self._tailer = LogTailer(path, poll_interval=poll_interval, start_at_eof=True)
+        if source is None:
+            source = LogTailer(path, poll_interval=poll_interval, start_at_eof=True)
+        self._source = source
+        self._idle_sleep = 0.0 if getattr(source, "blocks", False) else poll_interval
         self._on_event = on_event
         self._filter = DebouncedFilter(debounce)
         self._clock = clock
@@ -184,6 +207,7 @@ class LogWatcher:
         self._thread: Optional[threading.Thread] = None
         self.lines_seen = 0
         self.events_emitted = 0
+        self.stale_skipped = 0
 
     def start(self) -> None:
         if self._thread is not None:
@@ -195,15 +219,33 @@ class LogWatcher:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout)
-        self._tailer.close()
+        self._source.close()
 
     def _run(self) -> None:
-        for line in self._tailer.lines(self._stop):
+        while not self._stop.is_set():
+            batch = self._source.poll()
+            if batch:
+                self.handle_batch(batch)
+            elif self._idle_sleep:
+                time.sleep(self._idle_sleep)
+
+    def handle_batch(self, batch: list[str]) -> None:
+        stamps = [s for s in (game_time(line) for line in batch) if s is not None]
+        newest = max(stamps) if stamps else None
+        for i, line in enumerate(batch):
             self.lines_seen += 1
             if is_reward_screen_close(line):
                 kind = "close"
             elif self._filter.accept(line, self._clock()):
                 kind = "open"
+                stamp = game_time(line)
+                closed_already = any(is_reward_screen_close(later) for later in batch[i + 1:])
+                behind = newest - stamp if (newest is not None and stamp is not None) else 0.0
+                if closed_already or behind > STALE_TRIGGER_S:
+                    self.stale_skipped += 1
+                    log.warning("reward screen trigger arrived %.1f s late%s; skipping",
+                                behind, " (screen already closed)" if closed_already else "")
+                    continue
             else:
                 continue
             self.events_emitted += 1
@@ -211,5 +253,5 @@ class LogWatcher:
             try:
                 self._on_event(event)
             except Exception:
-                # A bad consumer must not kill the tailing thread.
+                # A bad consumer must not kill the reading thread.
                 log.exception("on_event callback raised")

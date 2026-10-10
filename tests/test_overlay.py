@@ -171,3 +171,69 @@ def test_log_trigger_drives_overlay(qapp, tmp_path):
     finally:
         watcher.stop()
         controller.shutdown()
+
+
+# --- live test 2 regressions ---------------------------------------------------------
+
+def _load_main_app():
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location("main_app", Path(__file__).parent.parent / "main_app.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_pipeline_skips_when_warframe_not_in_front():
+    from voidtrace.pipeline import PipelineSkipped
+
+    captured = []
+    pipeline = RewardPipeline(EntityResolver(ITEMS), FakePrices(), capture=lambda: captured.append(1),
+                              read_texts=lambda *a: ["FORMA BLUEPRINT"], foreground_check=lambda: False)
+    with pytest.raises(PipelineSkipped):
+        pipeline.read()
+    assert captured == []  # the screen was never captured
+
+
+def test_pipeline_skips_when_nothing_is_recognised():
+    from voidtrace.pipeline import PipelineSkipped
+
+    # What the end screen + terminal produced in live test 2.
+    junk = ["ly Wv Wards", "Oading Item List Latching Users", "Appdata Local Warfra Script Inf"]
+    pipeline = RewardPipeline(EntityResolver(ITEMS), FakePrices(), capture=lambda: "frame",
+                              read_texts=lambda *a: junk)
+    with pytest.raises(PipelineSkipped):
+        pipeline.read()
+
+
+def test_prices_arrive_progressively():
+    pipeline = RewardPipeline(EntityResolver(ITEMS), FakePrices(), capture=lambda: "frame",
+                              read_texts=lambda *a: ["BRATON PRIME STOCK", "NEKROS PRIME BLUEPRINT", "FORMA BLUEPRINT"])
+    cards = pipeline.read()
+    assert [c.pending for c in cards] == [True, True, False]  # Forma is untradable: nothing to fetch
+    updates = []
+    final = pipeline.price_cards(cards, on_update=updates.append)
+    assert len(updates) == 2
+    assert not any(c.pending for c in final)
+    assert [c.best for c in final] == [False, True, False]
+
+
+def test_close_during_capture_delay_cancels_capture(qapp):
+    main_app = _load_main_app()
+    captures = []
+    pipeline = RewardPipeline(EntityResolver(ITEMS), FakePrices(), capture=lambda: captures.append(1) or "frame",
+                              read_texts=lambda *a: ["NEKROS PRIME BLUEPRINT"])
+    overlay = OverlayWindow(QRect(0, 0, 1920, 1080))
+    controller = main_app.Controller(pipeline, overlay, capture_delay_ms=50)
+    from voidtrace.log_watcher import RewardScreenEvent
+    from datetime import datetime
+
+    controller.on_log_event(RewardScreenEvent(datetime.now(), "Got rewards", "open"))
+    controller.on_log_event(RewardScreenEvent(datetime.now(), "Relic reward screen shut down", "close"))
+    deadline = time.monotonic() + 0.5
+    while time.monotonic() < deadline:
+        qapp.processEvents()
+        time.sleep(0.01)
+    controller.shutdown()
+    assert captures == [] and overlay.cards == []

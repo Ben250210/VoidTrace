@@ -106,13 +106,15 @@ class OverlayWindow(QWidget):
             p.drawText(area, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, elided)
 
         if card.name is None:
-            text(0, "Unreadable", WARN, line_h * 0.7, bold=True)
-            text(1, card.resolution.cleaned or "-", MUTED, line_h * 0.55)
+            # Never echo raw OCR: on a wrong screen it is junk (live test 2 printed terminal text).
+            text(1, "Unreadable", WARN, line_h * 0.7, bold=True)
             return
 
         text(0, card.name, TEXT, line_h * 0.6, bold=True)
         if card.resolution.item.slug is None:
             plat = "Untradable"
+        elif card.pending:
+            plat = "price…"
         elif card.price is None:
             plat = "Price unavailable"
         else:

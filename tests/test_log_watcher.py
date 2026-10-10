@@ -221,13 +221,62 @@ def test_watcher_emits_close_event_without_debounce(tmp_path):
     watcher.start()
     try:
         time.sleep(0.05)
-        _append(log, "ProjectionRewardChoice.lua: Got rewards\n"
-                     "ProjectionRewardChoice.lua: Selection countdown done\n"
-                     "ProjectionRewardChoice.lua: Relic reward screen shut down\n")
+        _append(log, "330.225 Script [Info]: ProjectionRewardChoice.lua: Got rewards\n")
+        _wait_for(lambda: watcher.lines_seen >= 1)
+        _append(log, "345.225 Script [Info]: ProjectionRewardChoice.lua: Selection countdown done\n"
+                     "345.225 Script [Info]: ProjectionRewardChoice.lua: Relic reward screen shut down\n")
         _wait_for(lambda: watcher.lines_seen >= 3)
     finally:
         watcher.stop()
     assert [e.kind for e in events] == ["open", "close"]
+
+
+class ListSource:
+    """Line source that hands out prepared batches, like a chunked EE.log write."""
+
+    def __init__(self, batches):
+        self.batches = list(batches)
+
+    def poll(self):
+        return self.batches.pop(0) if self.batches else []
+
+    def close(self):
+        pass
+
+
+def test_open_and_close_in_one_batch_is_stale():
+    # Second live test: EE.log delivered the open and the close together, 15 s late.
+    events: list[RewardScreenEvent] = []
+    watcher = LogWatcher(None, on_event=events.append, source=ListSource([]))
+    watcher.handle_batch([
+        "2592.723 Script [Info]: ProjectionRewardChoice.lua: Got rewards",
+        "2607.725 Script [Info]: ProjectionRewardChoice.lua: Relic reward screen shut down",
+    ])
+    assert [e.kind for e in events] == ["close"]
+    assert watcher.stale_skipped == 1
+
+
+def test_trigger_far_behind_newest_line_is_stale():
+    events: list[RewardScreenEvent] = []
+    watcher = LogWatcher(None, on_event=events.append, source=ListSource([]))
+    watcher.handle_batch([
+        "2592.723 Script [Info]: ProjectionRewardChoice.lua: Got rewards",
+        "2603.100 Sys [Info]: something else, 10 s later",
+    ])
+    assert events == [] and watcher.stale_skipped == 1
+
+
+def test_fresh_trigger_is_emitted_from_a_line_source():
+    events: list[RewardScreenEvent] = []
+    source = ListSource([["2592.723 Script [Info]: ProjectionRewardChoice.lua: Got rewards",
+                          "2592.727 Script [Info]: ProjectionsCountdown.lua: Initialize timer nil\t15"]])
+    watcher = LogWatcher(None, on_event=events.append, source=source, poll_interval=0.01)
+    watcher.start()
+    try:
+        _wait_for(lambda: watcher.lines_seen >= 2)
+    finally:
+        watcher.stop()
+    assert [e.kind for e in events] == ["open"]
 
 
 def test_close_line_is_not_an_open_trigger():

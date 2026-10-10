@@ -18,7 +18,9 @@ import json
 import logging
 import math
 import os
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Optional, Protocol, Sequence
@@ -162,6 +164,7 @@ class JsonPriceCache:
 
     def __init__(self, path: Optional[Path] = None) -> None:
         self.path = path or default_cache_dir() / "prices.json"
+        self._lock = threading.Lock()  # prices are fetched in parallel threads
 
     def _load(self) -> dict[str, dict]:
         try:
@@ -177,12 +180,13 @@ class JsonPriceCache:
             return None
 
     def put(self, stats: PriceStats) -> None:
-        data = self._load()
-        data[stats.slug] = asdict(replace(stats, stale=False))
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data), encoding="utf-8")
-        tmp.replace(self.path)
+        with self._lock:
+            data = self._load()
+            data[stats.slug] = asdict(replace(stats, stale=False))
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data), encoding="utf-8")
+            tmp.replace(self.path)
 
 
 class SupabasePriceCache:
@@ -259,12 +263,18 @@ class PriceService:
         cached = self._cached(slug)
         if cached is not None and time.time() - cached.fetched_at < self.max_age:
             return cached
-        try:
-            orders = self.client.get(f"/orders/item/{slug}")
-        except Exception as exc:
-            log.warning("live price fetch failed for %s: %s", slug, exc)
-            return replace(cached, stale=True) if cached is not None else None
-        stats = summarize(slug, orders, self._statistics(slug))
+        # Orders and trade history in parallel: each request takes 0.5-1.2 s, and the client's
+        # lock only spaces their start times to respect the rate limit.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            orders_future = pool.submit(self.client.get, f"/orders/item/{slug}")
+            stats_future = pool.submit(self._statistics, slug)
+            try:
+                orders = orders_future.result()
+            except Exception as exc:
+                log.warning("live price fetch failed for %s: %s", slug, exc)
+                return replace(cached, stale=True) if cached is not None else None
+            statistics = stats_future.result()
+        stats = summarize(slug, orders, statistics)
         if stats is not None:
             try:
                 self.cache.put(stats)
