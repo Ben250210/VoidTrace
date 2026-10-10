@@ -147,3 +147,20 @@ def test_ocr_reads_synthetic_name():
     frame = synthetic_reward_screen(["NEKROS PRIME"])
     clean = preprocess(crop(frame, reward_slots(1920, 1080, 1)[0]))
     assert "NEKROS" in ocr(clean).upper()
+
+
+@pytest.mark.skipif(find_tesseract() is None, reason="Tesseract not installed")
+def test_cleaning_reads_harsh_screen_with_bloom_panel_and_particles():
+    from demo import REWARDS, harsh_reward_screen
+    from voidtrace.items import Item
+    from voidtrace.text_cleaner import EntityResolver
+
+    items = [Item(name.title(), None, 0) for name in REWARDS] + [
+        Item("Nekros Prime Chassis Blueprint", None, 0),
+        Item("Akstiletto Prime Link", None, 0),
+        Item("Saryn Prime Neuroptics Blueprint", None, 0),
+    ]
+    resolver = EntityResolver(items)
+    frame = harsh_reward_screen(REWARDS)
+    texts = read_reward_texts(frame)
+    assert [r.item.name if r.item else None for r in resolver.resolve_all(texts)] == [n.title() for n in REWARDS]

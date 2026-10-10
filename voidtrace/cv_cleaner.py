@@ -81,14 +81,32 @@ def flatten_illumination(gray: np.ndarray) -> np.ndarray:
     """Remove smooth large-scale light (gradients, bloom, translucent panels), keep thin strokes.
 
     A morphological top-hat keeps bright details smaller than the kernel; a black-hat keeps
-    dark ones. Whichever responds more strongly tells us the text polarity, so this works for
-    light-on-dark and dark-on-light UI themes. Output: text bright on a near-black background.
+    dark ones. Whichever has the stronger peak response tells us the text polarity, so this
+    works for light-on-dark and dark-on-light UI themes. Peaks, not sums: on a noisy panel the
+    many weak noise responses can outweigh the few strong text strokes in a sum.
+    Output: text bright on a near-black background.
     """
     k = max(9, int(gray.shape[0] * 0.2)) | 1  # odd, larger than a letter stroke
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
     tophat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel)
     blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, kernel)
-    return tophat if tophat.sum() >= blackhat.sum() else blackhat
+    return tophat if np.percentile(tophat, 99.5) >= np.percentile(blackhat, 99.5) else blackhat
+
+
+def remove_specks(text_white: np.ndarray, min_rel_height: float = 0.45) -> np.ndarray:
+    """Drop connected blobs much shorter than the letters (particles, sparks, dust).
+
+    Letter height is estimated as the 90th percentile of blob heights, since the letters are
+    the tallest common blobs once smooth light has been flattened away.
+    """
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(text_white, connectivity=8)
+    if n <= 1:
+        return text_white
+    heights = stats[1:, cv2.CC_STAT_HEIGHT]
+    ref = np.percentile(heights, 90)
+    keep = np.zeros(n, dtype=bool)
+    keep[1:] = heights >= min_rel_height * ref
+    return np.where(keep[labels], 255, 0).astype(np.uint8)
 
 
 def preprocess(img: np.ndarray, upscale: float = 2.0, blur_ksize: int = 3, pad: int = 10) -> np.ndarray:
@@ -105,6 +123,7 @@ def preprocess(img: np.ndarray, upscale: float = 2.0, blur_ksize: int = 3, pad: 
         gray = cv2.GaussianBlur(gray, (blur_ksize, blur_ksize), 0)
     flat = flatten_illumination(gray)
     _, binary = cv2.threshold(flat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    binary = remove_specks(binary)
     binary = cv2.bitwise_not(binary)  # text was bright; make it black on white
     if pad:
         binary = cv2.copyMakeBorder(binary, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=255)
@@ -149,7 +168,9 @@ def detect_player_count(band_img: np.ndarray) -> int:
 # --- OCR --------------------------------------------------------------------
 
 DEFAULT_TESSERACT = Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe")
-CHAR_WHITELIST = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789&'- "
+# No character whitelist: in Tesseract 5 a whitelist without a space glues words together
+# ("NEKROSPRIMEBLUEPRINT"), and a quoted one breaks pytesseract's config parsing.
+# Illegal characters are stripped in Phase 3 instead.
 
 
 class TesseractNotFound(RuntimeError):
@@ -180,8 +201,7 @@ def ocr(binary: np.ndarray, psm: int = 6) -> str:
             "or set TESSERACT_CMD to tesseract.exe."
         )
     pytesseract.pytesseract.tesseract_cmd = cmd
-    config = f'--psm {psm} -c tessedit_char_whitelist="{CHAR_WHITELIST}"'
-    return pytesseract.image_to_string(binary, config=config)
+    return pytesseract.image_to_string(binary, config=f"--psm {psm}")
 
 
 # --- capture + pipeline ------------------------------------------------------
