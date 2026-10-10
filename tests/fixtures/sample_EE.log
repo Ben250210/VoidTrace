@@ -1,0 +1,10 @@
+SYNTHETIC FIXTURE (not real game output). Replace with a real EE.log excerpt once the trigger string is confirmed.
+0.101 Sys [Info]: Loading ui/Menu.swf
+0.202 Script [Info]: Inventory.lua: loaded 412 items
+1.300 Net [Info]: ping 48ms
+5.000 Script [Info]: MissionTimer tick
+7.512 Script [Info]: Choice.swf opened
+8.001 Sys [Info]: Renderer frame 1200
+12.400 Script [Info]: Choice.lua: rewardsReady
+12.401 Script [Info]: Choice.lua: rewardsReady
+30.000 Net [Info]: keepalive
