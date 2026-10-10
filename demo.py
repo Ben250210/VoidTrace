@@ -19,6 +19,7 @@ import statistics
 import time
 from collections import Counter
 from pathlib import Path
+from typing import Optional
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_QPA_FONTDIR", r"C:\Windows\Fonts")
@@ -430,6 +431,50 @@ cutoff 60. A read that fits several names whole, like "Nekros Prime", is marked 
 requests per item, and all items, run concurrently within Warframe.Market's rate limit.</p>
 </section>"""
 
+# --- market window ------------------------------------------------------------------------
+
+MARKET_DEMO_ITEM = ("primed_continuity", 10)
+
+
+def stage_market_window(offline: bool) -> Optional[dict]:
+    """Render the market window with live sellers; seller names are pixelated (they are other players)."""
+    if offline:
+        return None
+    from PyQt6.QtWidgets import QApplication
+
+    from voidtrace.items import load_catalog
+    from voidtrace.market_window import MarketWindow
+    from voidtrace.sellers import SellerService
+
+    app = QApplication.instance() or QApplication([])
+    window = MarketWindow(load_catalog(), SellerService())
+    window.open_item(*MARKET_DEMO_ITEM)
+    deadline = time.monotonic() + 15
+    while window.table.rowCount() == 0 and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.05)
+    window.copy_row(0)
+    whisper = QApplication.clipboard().text()
+    rows, flagged = len(window.rows), sum(r.suspicious for r in window.rows)
+    app.processEvents()
+    tmp = OUT / "_market.png"
+    window.grab().save(str(tmp))
+    window.shutdown()
+    img = cv2.imread(str(tmp))
+    tmp.unlink(missing_ok=True)
+    # Pixelate the seller-name column and the toast that names a seller.
+    table = window.table.geometry()
+    name_w = window.table.columnWidth(0)
+    for y0, y1, x0, x1 in [(table.y() + 30, table.bottom(), table.x(), table.x() + name_w),
+                           (window.toast.geometry().y(), window.toast.geometry().bottom(), 0, img.shape[1])]:
+        roi = img[y0:y1, x0:x1]
+        if roi.size:
+            small = cv2.resize(roi, (max(1, roi.shape[1] // 12), max(1, roi.shape[0] // 12)), interpolation=cv2.INTER_AREA)
+            img[y0:y1, x0:x1] = cv2.resize(small, (roi.shape[1], roi.shape[0]), interpolation=cv2.INTER_NEAREST)
+    seller = whisper.split(" ", 2)[1] if whisper.startswith("/w ") else ""
+    return {"img": png_uri(img), "rows": rows, "flagged": flagged,
+            "whisper": whisper.replace(seller, "<seller>") if seller else whisper}
+
 # --- stage 5: end to end ----------------------------------------------------------------
 
 def stage_overlay(frame: np.ndarray, resolver: EntityResolver, offline: bool) -> dict:
@@ -601,7 +646,20 @@ after a fixed 12 seconds.</p>
 </section>"""
 
 
-def render(log, cv, text, market, overlay, live, live2) -> str:
+def render_market_window(m: Optional[dict]) -> str:
+    if not m:
+        return ""
+    return f"""<h3>Buying: click a card, then click a seller</h3>
+<p>Clicking a price card opens that item's sellers. Only the cards take mouse input; every other click still goes to
+the game. Sellers who can trade now come first, cheapest first. Prices the IQR filter flags as outliers stay in the list
+but greyed out ({m['flagged']} of {m['rows']} here). Clicking a seller copies warframe.market's whisper:</p>
+<div class="decoys"><span>{esc(m['whisper'])}</span></div>
+<figure><img src="{m['img']}" alt="VoidTrace market window listing live sellers of Primed Continuity at rank 10">
+<figcaption>Live sellers of Primed Continuity at rank 10. Seller names pixelated. Platinum and ducat icons are drawn
+by VoidTrace, not taken from the game.</figcaption></figure>"""
+
+
+def render(log, cv, text, market, overlay, live, live2, market_window=None) -> str:
     h = []
     h.append('<title>VoidTrace Prototype</title>')
     h.append('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>')
@@ -778,6 +836,7 @@ always-on-top window that ignores mouse input, so clicks pass through to Warfram
 <figcaption>Rendered offscreen at 1920×1080. Gold border marks the most valuable pick.</figcaption></figure>
 <div class="scroll"><table><thead><tr><th>Slot</th><th>Item</th><th>Platinum</th><th>Ducats</th><th>Price basis</th><th></th></tr></thead>
 <tbody>{crow}</tbody></table></div>
+{render_market_window(market_window)}
 </section>""")
 
     h.append("""<section>
@@ -826,13 +885,15 @@ def main(argv=None) -> int:
     market = stage_market(args.offline)
     print("stage 5: end to end + overlay...")
     overlay = stage_overlay(cv.pop("frame_raw"), resolver, args.offline)
+    print("market window: live sellers...")
+    market_window = stage_market_window(args.offline)
     print("live test: real screenshot + log excerpt...")
     live = stage_live(resolver, market)
     print("live test 2: misreads + timing...")
     live2 = stage_live2(resolver, args.offline)
 
     report = OUT / "report.html"
-    report.write_text(render(log, cv, text, market, overlay, live, live2), encoding="utf-8")
+    report.write_text(render(log, cv, text, market, overlay, live, live2, market_window), encoding="utf-8")
     print(f"wrote {report} ({report.stat().st_size / 1024:.0f} KB)")
     return 0
 

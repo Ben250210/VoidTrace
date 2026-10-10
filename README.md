@@ -46,6 +46,17 @@ python 4_price_cleaner.py "Nekros Prime Blueprint"
 python tools/sample_log_lines.py --tail 40
 ```
 
+## Buying from players
+
+- **Click a price card** on the reward screen to open that item's sellers. Only the cards take mouse input;
+  every other click still goes to the game.
+- **Ctrl+Shift+M** (or the tray icon) opens the market window for any item, mods included. Type to search;
+  ranked items get a rank picker.
+- **Click a seller** to copy warframe.market's whisper, then paste it in game chat:
+  `/w Seller Hi! I want to buy: "Primed Continuity (rank 10)" for 45 platinum. (warframe.market)`
+- Sellers in game come first, cheapest first. Prices the IQR filter flags as outliers stay listed, greyed out.
+- Platinum and ducat icons are drawn by VoidTrace (`voidtrace/icons.py`), not taken from the game.
+
 ## Price cache
 
 Local JSON in `%LOCALAPPDATA%\VoidTrace\` by default. To share a cache through Supabase,

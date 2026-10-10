@@ -19,12 +19,16 @@ from typing import Optional
 
 import cv2
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QIcon, QPixmap
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from voidtrace.cv_cleaner import TesseractNotFound, capture_screen, warframe_is_foreground
 from voidtrace.debug_log import DebugChannelBusy, DebugLogSource
-from voidtrace.items import load_items
+from voidtrace import hotkey
+from voidtrace.icons import platinum_icon
+from voidtrace.items import load_catalog, load_items
+from voidtrace.market_window import MarketWindow
+from voidtrace.sellers import SellerService
 from voidtrace.log_watcher import LogTailer, LogWatcher, RewardScreenEvent, default_log_path
 from voidtrace.overlay import OverlayWindow, cards_summary
 from voidtrace.pipeline import PipelineSkipped, RewardCard, RewardPipeline
@@ -127,13 +131,14 @@ def make_line_source(kind: str, path: Path):
     return LogTailer(path, start_at_eof=True)
 
 
-def make_tray(app: QApplication) -> QSystemTrayIcon:
-    pixmap = QPixmap(16, 16)
-    pixmap.fill(QColor(232, 190, 90))
-    tray = QSystemTrayIcon(QIcon(pixmap), app)
+def make_tray(app: QApplication, open_market) -> QSystemTrayIcon:
+    tray = QSystemTrayIcon(QIcon(platinum_icon(32)), app)
     tray.setToolTip("VoidTrace")
     menu = QMenu()
+    menu.addAction("Open market (Ctrl+Shift+M)", open_market)
+    menu.addSeparator()
     menu.addAction("Quit VoidTrace", app.quit)
+    tray.activated.connect(lambda reason: open_market() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
     tray.setContextMenu(menu)
     tray.show()
     return tray
@@ -155,6 +160,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                         help="capture even when Warframe is not the active window (testing)")
     parser.add_argument("--hide-after", type=float, default=20.0,
                         help="fallback: seconds the overlay stays up if the close line is missed")
+    parser.add_argument("--no-hotkey", action="store_true", help="do not register Ctrl+Shift+M")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -181,7 +187,23 @@ def main(argv: Optional[list[str]] = None) -> int:
         foreground_check=None if args.any_window else warframe_is_foreground,
     )
     controller = Controller(pipeline, overlay, int(args.delay * 1000))
-    tray = make_tray(app)  # noqa: F841 (keep a reference)
+
+    market = MarketWindow(load_catalog(), SellerService())
+
+    def open_market() -> None:
+        market.show()
+        market.raise_()
+        market.activateWindow()
+        market.search.setFocus()
+
+    def open_card(slot: int) -> None:
+        item = overlay.cards[slot].resolution.item
+        if item is not None and item.slug is not None:
+            market.open_item(item.slug)
+
+    overlay.card_clicked.connect(open_card)
+    tray = make_tray(app, open_market)  # noqa: F841 (keep a reference)
+    hotkey_filter = None if args.no_hotkey else hotkey.register(app, open_market)  # noqa: F841
 
     watcher = None
     if args.demo is not None:
@@ -204,6 +226,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         if watcher is not None:
             watcher.stop()
         controller.shutdown()
+        market.shutdown()
+        hotkey.unregister()
 
 
 if __name__ == "__main__":

@@ -128,12 +128,60 @@ def test_overlay_auto_hides(qapp):
     assert not overlay.isVisible() and overlay.cards == []
 
 
-def test_overlay_is_click_through(qapp):
-    from PyQt6.QtCore import Qt
+def test_overlay_takes_input_only_on_the_cards(qapp):
+    from PyQt6.QtCore import QPoint, Qt
 
-    flags = OverlayWindow(QRect(0, 0, 100, 100)).windowFlags()
-    assert flags & Qt.WindowType.WindowTransparentForInput
+    overlay = OverlayWindow(QRect(0, 0, 1920, 1080))
+    flags = overlay.windowFlags()
     assert flags & Qt.WindowType.WindowStaysOnTopHint
+    assert flags & Qt.WindowType.WindowDoesNotAcceptFocus  # never steals focus from the game
+    overlay.show_cards(sample_cards())
+    region = overlay.input_region()
+    for rect in overlay.card_rects:
+        assert region.contains(rect.center())
+    # The game's own reward cards (the name band above) and the rest of the screen stay the game's.
+    assert not region.contains(QPoint(960, 455))
+    assert not region.contains(QPoint(100, 100))
+
+
+def _click(overlay, point):
+    from PyQt6.QtCore import QPointF, Qt
+    from PyQt6.QtGui import QMouseEvent
+    from PyQt6.QtCore import QEvent
+
+    event = QMouseEvent(QEvent.Type.MouseButtonPress, QPointF(point), QPointF(point),
+                        Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    overlay.mousePressEvent(event)
+
+
+def test_clicking_a_tradable_card_asks_for_its_sellers(qapp):
+    overlay = OverlayWindow(QRect(0, 0, 1920, 1080))
+    overlay.show_cards(sample_cards())
+    clicked = []
+    overlay.card_clicked.connect(clicked.append)
+    _click(overlay, overlay.card_rects[0].center())   # Nekros Prime Blueprint
+    _click(overlay, overlay.card_rects[2].center())   # Forma Blueprint: untradable
+    _click(overlay, overlay.card_rects[3].center())   # unreadable
+    assert clicked == [0]
+
+
+def test_cards_draw_icons_not_currency_words(qapp, monkeypatch):
+    from PyQt6.QtGui import QPainter
+
+    drawn = []
+    original = QPainter.drawText
+
+    def spy(self, *args):
+        drawn.append(next((a for a in args if isinstance(a, str)), ""))
+        return original(self, *args)
+
+    monkeypatch.setattr(QPainter, "drawText", spy)
+    overlay = OverlayWindow(QRect(0, 0, 1920, 1080))
+    overlay.show_cards(sample_cards())
+    overlay.grab()
+    text = " ".join(drawn)
+    assert "30" in text
+    assert "plat" not in text and "ducats" not in text
 
 
 def test_cards_summary_lists_each_slot():
