@@ -18,10 +18,11 @@ from typing import Callable, Optional
 log = logging.getLogger(__name__)
 
 # Keyword prefilter: cheap substring checks run before the regex.
-# UNVERIFIED: taken from the project spec. Confirm against a real relic run
-# (see tools/sample_log_lines.py) and adjust before relying on it.
-KEYWORDS: tuple[str, ...] = ("Choice.swf", "Choice.lua")
-TRIGGER_RE = re.compile(r"\bChoice\.(?:swf|lua)\b")
+# Same markers WFInfo (github.com/WFCD/WFinfo, Data.cs) uses to detect the relic
+# reward screen. Not yet observed in this machine's EE.log; confirm with
+# tools/sample_log_lines.py after a relic run.
+KEYWORDS: tuple[str, ...] = ("Pause countdown done", "Got rewards")
+TRIGGER_RE = re.compile(r"\b(?:Pause countdown done|Got rewards)\b")
 
 
 def default_log_path() -> Path:

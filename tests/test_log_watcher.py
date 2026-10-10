@@ -24,8 +24,8 @@ FIXTURE = ROOT / "tests" / "fixtures" / "sample_EE.log"
 @pytest.mark.parametrize(
     "line",
     [
-        "7.512 Script [Info]: Choice.swf opened",
-        "12.400 Script [Info]: Choice.lua: rewardsReady",
+        "7.512 Script [Info]: ProjectionRewardChoice.lua: Pause countdown done",
+        "12.400 Script [Info]: ProjectionRewardChoice.lua: Got rewards",
     ],
 )
 def test_trigger_lines_match(line):
@@ -38,8 +38,9 @@ def test_trigger_lines_match(line):
         "0.101 Sys [Info]: Loading ui/Menu.swf",
         "1.300 Net [Info]: ping 48ms",
         "",
-        "Choice without an extension",
-        "MyChoice.swfx is not a trigger",
+        "Pause countdown started",
+        "Got rewardsList is not a trigger",
+        "Net [Info]: DeleteSessionCallback(1, {\"rewardSeed\":7554481910643471609})",
     ],
 )
 def test_noise_lines_rejected(line):
@@ -55,7 +56,7 @@ def test_default_log_path_uses_localappdata(monkeypatch, tmp_path):
 
 def test_debounce_collapses_repeats_within_window():
     filt = DebouncedFilter(debounce=5.0)
-    line = "Choice.lua: rewardsReady"
+    line = "Got rewards"
     assert filt.accept(line, now=0.0)
     assert not filt.accept(line, now=1.0)
     assert not filt.accept(line, now=4.9)
@@ -63,7 +64,7 @@ def test_debounce_collapses_repeats_within_window():
 
 def test_debounce_window_measured_from_last_accepted_event():
     filt = DebouncedFilter(debounce=5.0)
-    line = "Choice.swf opened"
+    line = "Pause countdown done"
     assert filt.accept(line, now=0.0)
     assert not filt.accept(line, now=3.0)  # suppressed, must NOT extend the window
     assert filt.accept(line, now=5.0)      # 5s after the accepted event
@@ -72,7 +73,7 @@ def test_debounce_window_measured_from_last_accepted_event():
 def test_debounce_ignores_noise_without_consuming_window():
     filt = DebouncedFilter(debounce=5.0)
     assert not filt.accept("Net ping", now=0.0)
-    assert filt.accept("Choice.swf opened", now=0.1)
+    assert filt.accept("Pause countdown done", now=0.1)
 
 
 # --- tailer ----------------------------------------------------------------
@@ -84,11 +85,11 @@ def _append(path: Path, text: str) -> None:
 
 def test_start_at_eof_ignores_existing_content(tmp_path):
     log = tmp_path / "EE.log"
-    log.write_text("old Choice.swf opened\n", encoding="utf-8")
+    log.write_text("old Pause countdown done\n", encoding="utf-8")
     tailer = LogTailer(log)
     assert tailer.poll() == []
-    _append(log, "new Choice.lua: rewardsReady\n")
-    assert tailer.poll() == ["new Choice.lua: rewardsReady"]
+    _append(log, "new Got rewards\n")
+    assert tailer.poll() == ["new Got rewards"]
     tailer.close()
 
 
@@ -105,10 +106,10 @@ def test_partial_line_is_held_until_newline(tmp_path):
     log.write_text("", encoding="utf-8")
     tailer = LogTailer(log)
     assert tailer.poll() == []
-    _append(log, "Choice.sw")
+    _append(log, "Pause countdown do")
     assert tailer.poll() == []
-    _append(log, "f opened\n")
-    assert tailer.poll() == ["Choice.swf opened"]
+    _append(log, "ne\n")
+    assert tailer.poll() == ["Pause countdown done"]
     tailer.close()
 
 
@@ -117,8 +118,8 @@ def test_crlf_line_endings_are_stripped(tmp_path):
     log.write_text("", encoding="utf-8")
     tailer = LogTailer(log)
     tailer.poll()
-    _append(log, "Choice.swf opened\r\n")
-    assert tailer.poll() == ["Choice.swf opened"]
+    _append(log, "Pause countdown done\r\n")
+    assert tailer.poll() == ["Pause countdown done"]
     tailer.close()
 
 
@@ -140,8 +141,8 @@ def test_missing_file_waits_then_attaches(tmp_path):
     log = tmp_path / "EE.log"
     tailer = LogTailer(log, start_at_eof=False)
     assert tailer.poll() == []
-    log.write_text("Choice.swf opened\n", encoding="utf-8")
-    assert tailer.poll() == ["Choice.swf opened"]
+    log.write_text("Pause countdown done\n", encoding="utf-8")
+    assert tailer.poll() == ["Pause countdown done"]
     tailer.close()
 
 
@@ -149,7 +150,7 @@ def test_fixture_replay_finds_expected_trigger_count():
     lines = FIXTURE.read_text(encoding="utf-8").splitlines()
     filt = DebouncedFilter(debounce=0.0)
     hits = [line for line in lines if filt.accept(line, now=0.0)]
-    assert len(hits) == 3  # Choice.swf line + two Choice.lua lines
+    assert len(hits) == 3  # one "Pause countdown done" + two "Got rewards"
 
 
 # --- watcher thread --------------------------------------------------------
@@ -162,12 +163,12 @@ def test_watcher_emits_one_event_for_duplicate_trigger(tmp_path):
     watcher.start()
     try:
         time.sleep(0.05)
-        _append(log, "noise line\nChoice.lua: rewardsReady\nChoice.lua: rewardsReady\n")
+        _append(log, "noise line\nGot rewards\nGot rewards\n")
         _wait_for(lambda: watcher.lines_seen >= 3)
     finally:
         watcher.stop()
     assert len(events) == 1
-    assert events[0].raw_line == "Choice.lua: rewardsReady"
+    assert events[0].raw_line == "Got rewards"
 
 
 def test_callback_exception_does_not_kill_watcher(tmp_path):
@@ -183,9 +184,9 @@ def test_callback_exception_does_not_kill_watcher(tmp_path):
     watcher.start()
     try:
         time.sleep(0.05)
-        _append(log, "Choice.swf opened\n")
+        _append(log, "Pause countdown done\n")
         _wait_for(lambda: len(calls) == 1)
-        _append(log, "Choice.swf opened\n")
+        _append(log, "Pause countdown done\n")
         _wait_for(lambda: len(calls) == 2)
     finally:
         watcher.stop()

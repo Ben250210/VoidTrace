@@ -21,5 +21,6 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-The trigger strings (`Choice.swf`, `Choice.lua`) come from the project spec and are not yet
-confirmed against real game output. See `voidtrace/log_watcher.py`.
+The trigger strings (`Pause countdown done`, `Got rewards`) are the ones WFInfo uses
+(github.com/WFCD/WFinfo). They have not yet been observed in this machine's log; confirm
+with `tools/sample_log_lines.py` after a relic run. See `voidtrace/log_watcher.py`.
