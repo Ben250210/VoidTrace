@@ -1,0 +1,7 @@
+numpy>=2.0
+opencv-python>=4.9
+pytesseract>=0.3.10
+mss>=9.0
+rapidfuzz>=3.0
+requests>=2.31
+PyQt6>=6.6
