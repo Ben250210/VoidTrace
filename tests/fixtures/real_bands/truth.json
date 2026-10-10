@@ -1,0 +1,62 @@
+{
+  "2026-10-10_200153": {
+    "screen": [
+      2560,
+      1600
+    ],
+    "truth": [
+      "Bronco Prime Barrel",
+      "Sarofang Prime Handle",
+      "Paris Prime Grip",
+      "Caliban Prime Blueprint"
+    ]
+  },
+  "2026-10-10_200430": {
+    "screen": [
+      2560,
+      1600
+    ],
+    "truth": [
+      "Braton Prime Barrel",
+      "Vadarya Prime Receiver",
+      "Paris Prime Lower Limb",
+      "Dual Zoren Prime Handle"
+    ]
+  },
+  "2026-10-10_200817": {
+    "screen": [
+      2560,
+      1600
+    ],
+    "truth": [
+      "Braton Prime Barrel",
+      "Yareli Prime Chassis Blueprint",
+      "Kompressa Prime Blueprint",
+      "Forma Blueprint"
+    ]
+  },
+  "2026-10-10_191358": {
+    "screen": [
+      2560,
+      1600
+    ],
+    "truth": [
+      "Braton Prime Stock",
+      "Burston Prime Blueprint",
+      "Mesa Prime Blueprint",
+      "Perigale Prime Blueprint"
+    ]
+  },
+  "2026-10-10_192729": {
+    "screen": [
+      2559,
+      1599
+    ],
+    "truth": [
+      "Forma Blueprint",
+      "Aksomati Prime Receiver",
+      "Kestrel Prime Blade",
+      "Steflos Prime Receiver"
+    ]
+  }
+}

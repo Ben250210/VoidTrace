@@ -21,6 +21,9 @@ LEET_MAP = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7":
 # correct matches scored 67-100, the best junk match (end screen, terminal text) 43.
 DEFAULT_CUTOFF = 60.0
 AMBIGUITY_MARGIN = 3.0  # top-two score gap below which a match is flagged ambiguous
+# On five real reward screens every correct match scored >= 79; the confident misreads (art over a
+# two-line name) scored 63-74. Matches below this are shown as uncertain, not as fact.
+LOW_CONFIDENCE = 78.0
 
 
 def match_score(a: str, b: str, **_kwargs) -> float:
@@ -97,4 +100,5 @@ class EntityResolver:
         if len(top) > 1 and query != utils.default_process(best_name):
             contained = [n for n, _, _ in top if fuzz.token_set_ratio(query, utils.default_process(n)) == 100]
             ambiguous = ambiguous or len(contained) > 1
+        ambiguous = ambiguous or best_score < LOW_CONFIDENCE
         return Resolution(raw, cleaned, self.items[best_index], best_score, ambiguous)

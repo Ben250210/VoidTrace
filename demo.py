@@ -783,10 +783,13 @@ always-on-top window that ignores mouse input, so clicks pass through to Warfram
     h.append("""<section>
 <div class="stage-head"><span class="eyebrow">Status</span><h2>Open problems</h2></div>
 <ul class="limits">
-<li><b>One live run so far.</b> Trigger, OCR and layout are confirmed on one 4-player relic screen at 2560×1600,
-100% UI scale. Other resolutions, UI scales, themes and non-English clients are untested.</li>
-<li><b>The name crop also catches item art.</b> The crop band reaches above one-line names into the item picture, which
-adds junk to the OCR text. Fuzzy matching absorbs it today; detecting the text row first would make it robust.</li>
+<li><b>One screen size so far.</b> Five real relic screens, all at 2560×1600 and 100% UI scale. Other
+resolutions, UI scales, themes and non-English clients are untested.</li>
+<li><b>Item art over two-line names.</b> On those five screens (20 names) 19 resolve correctly; the miss is Kompressa
+Prime Blueprint, whose pistol art is drawn over the first line. Two fixes came out of that screen: text colour is now
+decided once for the whole name band (per slot, dark art flipped two slots to white-on-black), and squad size is scored
+by its weakest card (an average read 4 cards as 2). Matches under 78 are shown as uncertain: every correct real match
+scored 79 or more.</li>
 <li><b>Test 2 fixes not yet seen live.</b> The live debug-output trigger, stale-trigger guard, foreground check,
 progressive cards and new matcher are covered by tests and measured offline; they need a third live run, as does the
 card position below the squad's pick list.</li>

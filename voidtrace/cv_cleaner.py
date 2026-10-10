@@ -79,20 +79,39 @@ def crop(frame: np.ndarray, box: Box) -> np.ndarray:
     return frame[y0:y1, x0:x1]
 
 
-def flatten_illumination(gray: np.ndarray) -> np.ndarray:
+def _hats(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    k = max(9, int(gray.shape[0] * 0.2)) | 1  # odd, larger than a letter stroke
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+    return cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel), cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, kernel)
+
+
+def flatten_illumination(gray: np.ndarray, polarity: Optional[str] = None) -> np.ndarray:
     """Remove smooth large-scale light (gradients, bloom, translucent panels), keep thin strokes.
 
     A morphological top-hat keeps bright details smaller than the kernel; a black-hat keeps
-    dark ones. Whichever has the stronger peak response tells us the text polarity, so this
-    works for light-on-dark and dark-on-light UI themes. Peaks, not sums: on a noisy panel the
-    many weak noise responses can outweigh the few strong text strokes in a sum.
+    dark ones. `polarity` "light" (light text) picks the top-hat, "dark" the black-hat. Without it,
+    the stronger peak response decides. Peaks, not sums: on a noisy panel the many weak noise
+    responses can outweigh the few strong text strokes in a sum.
     Output: text bright on a near-black background.
     """
-    k = max(9, int(gray.shape[0] * 0.2)) | 1  # odd, larger than a letter stroke
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
-    tophat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel)
-    blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, kernel)
-    return tophat if np.percentile(tophat, 99.5) >= np.percentile(blackhat, 99.5) else blackhat
+    tophat, blackhat = _hats(gray)
+    if polarity is None:
+        polarity = "light" if np.percentile(tophat, 99.5) >= np.percentile(blackhat, 99.5) else "dark"
+    return tophat if polarity == "light" else blackhat
+
+
+def text_polarity(img: np.ndarray, upscale: float = 2.0) -> str:
+    """"light" or "dark" text, decided over a whole region (the full name band).
+
+    Per-slot decisions failed on live test 3: dark item art reaching into two slots made their
+    black-hat response win, and those slots came out inverted (white text in black blobs). All
+    names on one screen share a colour, so the band decides once for every slot.
+    """
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
+    if upscale != 1.0:
+        gray = cv2.resize(gray, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
+    tophat, blackhat = _hats(gray)
+    return "light" if np.percentile(tophat, 99.5) >= np.percentile(blackhat, 99.5) else "dark"
 
 
 def remove_specks(text_white: np.ndarray, min_rel_height: float = 0.45) -> np.ndarray:
@@ -111,7 +130,9 @@ def remove_specks(text_white: np.ndarray, min_rel_height: float = 0.45) -> np.nd
     return np.where(keep[labels], 255, 0).astype(np.uint8)
 
 
-def preprocess(img: np.ndarray, upscale: float = 2.0, blur_ksize: int = 3, pad: int = 10) -> np.ndarray:
+def preprocess(
+    img: np.ndarray, upscale: float = 2.0, blur_ksize: int = 3, pad: int = 10, polarity: Optional[str] = None
+) -> np.ndarray:
     """Grayscale -> upscale -> blur -> flatten illumination -> Otsu -> black text on white.
 
     Otsu on the raw crop would split background from bloom rather than text from everything
@@ -123,7 +144,7 @@ def preprocess(img: np.ndarray, upscale: float = 2.0, blur_ksize: int = 3, pad: 
         gray = cv2.resize(gray, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
     if blur_ksize > 1:
         gray = cv2.GaussianBlur(gray, (blur_ksize, blur_ksize), 0)
-    flat = flatten_illumination(gray)
+    flat = flatten_illumination(gray, polarity)
     _, binary = cv2.threshold(flat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     binary = remove_specks(binary)
     binary = cv2.bitwise_not(binary)  # text was bright; make it black on white
@@ -158,10 +179,11 @@ def detect_player_count(band_img: np.ndarray) -> int:
     layouts = {4: (1, 3, 5, 7), 3: (2, 4, 6), 2: (3, 5), 1: (4,)}
     best, best_score = MAX_PLAYERS, float("-inf")
     for players, centers in layouts.items():
-        inside = sum(mass[k] for k in centers) / len(centers)
+        # Every card of a layout must carry text, and its gaps must not: weakest center minus
+        # strongest gap. Averages let two strong middle names outvote empty outer slots
+        # (live test 3 read a 4-card screen as 2 cards).
         others = [k for k in mass if k not in centers]
-        outside = sum(mass[k] for k in others) / len(others)
-        score = inside - outside
+        score = min(mass[k] for k in centers) - max(mass[k] for k in others)
         if score > best_score:
             best, best_score = players, score
     return best
@@ -233,14 +255,31 @@ def read_reward_texts(
     if players is None:
         players = detect_player_count(crop(frame, reward_band(w, h, ui_scale)))
     raws = [crop(frame, box) for box in reward_slots(w, h, players, ui_scale)]
-    cleaned = [preprocess(raw) for raw in raws]
+    polarity = text_polarity(crop(frame, reward_band(w, h, ui_scale)))
+    cleaned = [preprocess(raw, polarity=polarity) for raw in raws]
     if debug_dir is not None:
         debug_dir.mkdir(parents=True, exist_ok=True)
         for i, (raw, clean) in enumerate(zip(raws, cleaned)):
             cv2.imwrite(str(debug_dir / f"slot{i}_raw.png"), raw)
             cv2.imwrite(str(debug_dir / f"slot{i}_clean.png"), clean)
     with ThreadPoolExecutor(max_workers=max(1, len(cleaned))) as pool:
-        return list(pool.map(ocr_fn, cleaned))
+        texts = list(pool.map(ocr_fn, cleaned))
+        # Safety net: a slot that reads almost nothing is retried with the opposite polarity.
+        retry = [i for i, text in enumerate(texts) if _letters(text) < MIN_LETTERS]
+        if retry:
+            other = "dark" if polarity == "light" else "light"
+            redo = list(pool.map(ocr_fn, [preprocess(raws[i], polarity=other) for i in retry]))
+            for i, text in zip(retry, redo):
+                if _letters(text) > _letters(texts[i]):
+                    texts[i] = text
+    return texts
+
+
+MIN_LETTERS = 6  # shortest relic reward name has more letters than this
+
+
+def _letters(text: str) -> int:
+    return sum(ch.isalpha() for ch in text)
 
 
 def warframe_is_foreground(pid_finder: Optional[Callable[[], Optional[int]]] = None) -> bool:
