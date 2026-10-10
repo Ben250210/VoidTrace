@@ -14,10 +14,14 @@ from PyQt6.QtWidgets import QWidget
 
 from .cv_cleaner import reward_band, reward_slots
 from .pipeline import RewardCard
+from .price_cleaner import price_basis_label
 
 CARD_WIDTH_RATIO = 0.95   # card width as a share of one reward slot
-CARD_HEIGHT = 92          # logical pixels at 1080p; scaled with the screen
-GAP_BELOW_NAMES = 12
+CARD_HEIGHT = 92          # reference pixels at 1080p; scaled with the screen
+# Gap between the reward-name band and the cards. Under each reward the game lists the
+# squad members who picked it (up to 4 names, ~110 px at 1080p); the first live test
+# showed cards placed right under the names covering that list, so they sit below it.
+GAP_BELOW_NAMES = 130
 
 BG = QColor(12, 14, 20, 215)
 BORDER = QColor(70, 80, 100, 230)
@@ -29,7 +33,7 @@ WARN = QColor(240, 140, 90)
 
 class OverlayWindow(QWidget):
     def __init__(self, screen_geometry: QRect, device_pixel_ratio: float = 1.0, ui_scale: float = 1.0,
-                 hide_after_ms: int = 12000) -> None:
+                 hide_after_ms: int = 20000) -> None:
         super().__init__()
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -112,13 +116,15 @@ class OverlayWindow(QWidget):
         elif card.price is None:
             plat = "Price unavailable"
         else:
-            plat = f"{card.price.median:g} plat"
+            plat = f"{card.price.price:g} plat"
         text(1, plat, BEST if card.best else TEXT, line_h * 0.85, bold=True)
         text(2, f"{card.ducats} ducats", MUTED, line_h * 0.55)
 
         notes = []
         if card.price is not None:
-            notes.append(f"{card.price.low:g}-{card.price.high:g}p · {card.price.source}")
+            notes.append(price_basis_label(card.price))
+            if card.price.sell_now is not None:
+                notes.append(f"buy now {card.price.sell_now:g}p")
             if card.price.stale:
                 notes.append("stale")
         if card.resolution.ambiguous:
@@ -131,7 +137,7 @@ def cards_summary(cards: Optional[list[RewardCard]]) -> str:
     """One line per card, used for console logging alongside the overlay."""
     lines = []
     for card in cards or []:
-        plat = f"{card.price.median:g}p" if card.price else "-"
+        plat = f"{card.price.price:g}p ({price_basis_label(card.price)})" if card.price else "-"
         star = " *" if card.best else ""
         lines.append(f"  slot {card.slot}: {card.name or '<unreadable>'} {plat} {card.ducats}d{star}")
     return "\n".join(lines)

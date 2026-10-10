@@ -29,17 +29,24 @@ import numpy as np
 from voidtrace import cv_cleaner
 from voidtrace.cv_cleaner import Box, crop, preprocess, reward_band, reward_slots, screen_scaling, slot_centers
 from voidtrace.items import load_items
-from voidtrace.log_watcher import KEYWORDS, default_log_path, is_reward_screen_line
+from voidtrace.log_watcher import (
+    KEYWORDS,
+    DebouncedFilter,
+    default_log_path,
+    is_reward_screen_close,
+    is_reward_screen_line,
+)
 from voidtrace.market import MarketClient
 from voidtrace.pipeline import RewardPipeline
-from voidtrace.price_cleaner import PriceService, iqr_filter, select_sell_prices, summarize
+from voidtrace.price_cleaner import PriceService, iqr_filter, price_basis_label, select_sell_prices, summarize
 from voidtrace.text_cleaner import EntityResolver
 
 OUT = Path(__file__).parent / "demo_output"
 REWARDS = ["NEKROS PRIME BLUEPRINT", "AKSTILETTO PRIME BARREL", "FORMA BLUEPRINT", "SARYN PRIME SYSTEMS BLUEPRINT"]
-MARKET_ITEMS = ["nekros_prime_blueprint", "akstiletto_prime_barrel", "saryn_prime_systems_blueprint", "braton_prime_receiver"]
+# The four rewards from the first live run.
+MARKET_ITEMS = ["braton_prime_stock", "burston_prime_blueprint", "mesa_prime_blueprint", "perigale_prime_blueprint"]
 LINE_RE = re.compile(r"^\s*[\d.]+\s+(\w+)\s+\[(\w+)\]")
-REDACT_RE = re.compile(r"[0-9a-f]{24}|\d{7,}|[\w.+-]+@[\w-]+\.[\w.]+", re.I)
+REDACT_RE = re.compile(r"[0-9a-f]{24}|0x[0-9a-f]{6,}|\b\d{1,3}(?:\.\d{1,3}){3}\b|\d{7,}|[\w.+-]+@[\w-]+\.[\w.]+", re.I)
 
 
 def esc(value) -> str:
@@ -76,14 +83,22 @@ def stage_log() -> dict:
     strict = [line for line in lines if is_reward_screen_line(line)]
     elapsed = time.perf_counter() - t0
 
-    # Same filter, with two real-format trigger lines spliced into the real noise.
-    injected = list(lines)
-    injected.insert(len(lines) // 2, "7877.512 Script [Info]: ProjectionRewardChoice.lua: Pause countdown done")
-    injected.insert(len(lines) // 2 + 40, "7879.004 Script [Info]: ProjectionRewardChoice.lua: Got rewards")
-    injected_hits = [i for i, line in enumerate(injected) if is_reward_screen_line(line)]
+    # Ground truth that does not depend on the trigger: every reward screen ends with its
+    # own "shut down" line. Count detections (debounced on the log's own timestamps) against it.
+    real_screens = sum(1 for line in lines if is_reward_screen_close(line))
+    filt = DebouncedFilter(debounce=5.0)
+    events = 0
+    for line in strict:
+        try:
+            stamp = float(line.split()[0])
+        except (ValueError, IndexError):
+            stamp = 0.0
+        events += filt.accept(line, now=stamp)
 
     decoys, seen = [], set()
     for line in naive_hits:
+        if is_reward_screen_line(line) or is_reward_screen_close(line):
+            continue  # real reward-screen lines are not decoys
         key = re.sub(r"[\d\[\]]+", "", line)[:60]
         if key not in seen:
             seen.add(key)
@@ -95,10 +110,9 @@ def stage_log() -> dict:
         "total": len(lines),
         "categories": cats.most_common(7),
         "naive": len(naive_hits),
-        "strict": len(strict),
+        "real_screens": real_screens,
+        "events": events,
         "rate": len(lines) / elapsed if elapsed else 0,
-        "injected_total": len(injected),
-        "injected_hits": len(injected_hits),
         "decoys": decoys,
     }
 
@@ -224,31 +238,34 @@ def stage_market(offline: bool) -> list[dict]:
     out = []
     for slug in MARKET_ITEMS:
         orders = client.get(f"/orders/item/{slug}")
+        stats_payload = client.get_v1(f"/items/{slug}/statistics")
         sells = [o for o in orders if o.get("type") == "sell" and o.get("visible", True)]
         all_prices = sorted(float(o["platinum"]) for o in sells)
         status = Counter(o["user"]["status"] for o in sells)
         tier_prices, tier = select_sell_prices(orders)
         kept, outliers = iqr_filter(tier_prices)
-        stats = summarize(slug, orders)
-        q1, q3 = np.percentile(tier_prices, [25, 75]) if len(tier_prices) >= 4 else (min(tier_prices), max(tier_prices))
+        stats = summarize(slug, orders, stats_payload)
         out.append({
             "slug": slug, "name": slug.replace("_", " ").title(),
             "n_sell": len(sells), "status": status, "all_prices": all_prices,
-            "naive_mean": statistics.fmean(all_prices), "naive_min": all_prices[0], "naive_max": all_prices[-1],
+            "naive_min": all_prices[0], "naive_max": all_prices[-1],
+            # What the first live run showed: median of every in-game ask.
+            "ask_median": float(np.median(tier_prices)),
             "tier": tier, "tier_prices": tier_prices, "kept": kept, "outliers": outliers,
-            "median": stats.median, "fence_lo": kept[0], "fence_hi": kept[-1], "q1": q1, "q3": q3,
+            "price": stats.price, "basis": stats.basis, "volume": stats.trade_volume, "sell_now": stats.sell_now,
+            "fence_lo": kept[0], "fence_hi": kept[-1],
         })
     return out
 
 
 def strip_svg(m: dict) -> str:
-    """Dot strip of every sell price; the in-tier, kept range is shaded."""
+    """Dot strip of every sell price; the kept in-tier range is shaded."""
     W, H, PAD = 640, 92, 28
-    hi = max(m["naive_max"], m["median"] * 3)
-    hi = min(hi, np.percentile(m["all_prices"], 99) * 1.15)
-    lo = 0.0
-    x = lambda v: PAD + (min(v, hi) - lo) / (hi - lo) * (W - 2 * PAD)  # noqa: E731
+    hi = min(max(m["naive_max"], m["ask_median"] * 2.5, 10), np.percentile(m["all_prices"], 99) * 1.15)
+    hi = max(hi, m["ask_median"] * 1.2, m["fence_hi"] * 1.05)
+    x = lambda v: PAD + min(v, hi) / hi * (W - 2 * PAD)  # noqa: E731
     tier_set = Counter(m["tier_prices"])
+    out_set = Counter(m["outliers"])
     parts = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="Sell prices for {esc(m["name"])}">']
     parts.append(f'<rect class="kept" x="{x(m["fence_lo"]):.1f}" y="14" width="{max(2, x(m["fence_hi"]) - x(m["fence_lo"])):.1f}" height="44" rx="3"/>')
     rng = np.random.default_rng(1)
@@ -257,19 +274,67 @@ def strip_svg(m: dict) -> str:
         if in_tier:
             tier_set[v] -= 1
         cls = "dot-tier" if in_tier else "dot-off"
-        if in_tier and v in m["outliers"]:
+        if in_tier and out_set[v] > 0:
+            out_set[v] -= 1
             cls = "dot-out"
-        jitter = rng.uniform(-14, 14)
-        parts.append(f'<circle class="{cls}" cx="{x(v):.1f}" cy="{36 + jitter:.1f}" r="{3.4 if in_tier else 2.4}"/>')
-    parts.append(f'<line class="median" x1="{x(m["median"]):.1f}" x2="{x(m["median"]):.1f}" y1="8" y2="64"/>')
-    parts.append(f'<line class="mean" x1="{x(m["naive_mean"]):.1f}" x2="{x(m["naive_mean"]):.1f}" y1="8" y2="64"/>')
-    step = 10 if hi <= 80 else 25 if hi <= 200 else 50
+        parts.append(f'<circle class="{cls}" cx="{x(v):.1f}" cy="{36 + rng.uniform(-14, 14):.1f}" r="{3.4 if in_tier else 2.4}"/>')
+    parts.append(f'<line class="mean" x1="{x(m["ask_median"]):.1f}" x2="{x(m["ask_median"]):.1f}" y1="8" y2="64"/>')
+    parts.append(f'<line class="median" x1="{x(m["price"]):.1f}" x2="{x(m["price"]):.1f}" y1="8" y2="64"/>')
+    step = next(s for s in (1, 2, 5, 10, 25, 50, 100) if hi / s <= 10)
     for t in range(0, int(hi) + 1, step):
         parts.append(f'<text class="tick" x="{x(t):.1f}" y="82" text-anchor="middle">{t}</text>')
     if m["naive_max"] > hi:
         parts.append(f'<text class="tick" x="{W - 4}" y="40" text-anchor="end">→ {m["naive_max"]:g}</text>')
     parts.append("</svg>")
     return "".join(parts)
+
+
+# --- live test ------------------------------------------------------------------------
+
+LIVE_SHOT = Path(__file__).parent / "docs" / "live_test_2026-10-10.png"  # lossless: JPEG artifacts broke 2 of 4 OCR reads
+LIVE_EXCERPT = Path(__file__).parent / "tests" / "fixtures" / "live_2026-10-10_EE_excerpt.log"
+LIVE_SCREEN = (2560, 1600)       # the laptop's physical resolution
+LIVE_OFFSET = (555, 164)         # where the cropped screenshot sits on that screen (from the overlay's own position)
+# What the overlay displayed during the live run, read off the screenshot.
+LIVE_SHOWN = {
+    "braton_prime_stock": ("Braton Prime Stock", 2.0),
+    "burston_prime_blueprint": ("Burston Prime Blueprint", 14.5),
+    "mesa_prime_blueprint": ("Mesa Prime Blueprint", 9.0),
+    "perigale_prime_blueprint": ("Perigale Prime Blueprint", 3.0),
+}
+
+
+def stage_live(resolver: EntityResolver, market: list[dict]) -> dict:
+    shot = cv2.imread(str(LIVE_SHOT))
+    W, H = LIVE_SCREEN
+    ox, oy = LIVE_OFFSET
+    frame = np.zeros((H, W, 3), np.uint8)
+    frame[oy:oy + shot.shape[0], ox:ox + shot.shape[1]] = shot
+    band = reward_band(W, H)
+    players = cv_cleaner.detect_player_count(crop(frame, band))
+    slots = []
+    for box in reward_slots(W, H, players):
+        clean = preprocess(crop(frame, box))
+        text = " ".join(cv_cleaner.ocr(clean).split())
+        res = resolver.resolve(text)
+        slots.append({"img": png_uri(clean), "ocr": text, "match": res.item.name if res.item else None})
+
+    lines = LIVE_EXCERPT.read_text(encoding="utf-8").splitlines()
+    keep = ("gets reward", "Got rewards", "Initialize timer", "Selection countdown done", "shut down")
+    key_lines = [line for line in lines if any(k in line for k in keep)]
+    t_open = next(float(l.split()[0]) for l in lines if "Got rewards" in l)
+    t_close = next(float(l.split()[0]) for l in lines if "shut down" in l)
+
+    by_slug = {m["slug"]: m for m in market}
+    prices = []
+    for slug, (name, shown) in LIVE_SHOWN.items():
+        m = by_slug.get(slug)
+        prices.append({"name": name, "shown": shown, "price": m["price"] if m else None,
+                       "volume": m["volume"] if m else None, "basis": m["basis"] if m else None})
+    return {
+        "shot": png_uri(shot, 1100, quality_jpeg=True), "players": players, "slots": slots,
+        "key_lines": key_lines, "n_lines": len(lines), "window": t_close - t_open, "prices": prices,
+    }
 
 
 # --- stage 5: end to end ----------------------------------------------------------------
@@ -298,7 +363,7 @@ def stage_overlay(frame: np.ndarray, resolver: EntityResolver, offline: bool) ->
     p.drawImage(0, 0, layer)
     p.end()
     band = reward_band(frame.shape[1], frame.shape[0])
-    region = base.copy(QRect(band.x - 40, band.y - 60, band.w + 80, band.h + 200))
+    region = base.copy(QRect(band.x - 40, band.y - 60, band.w + 80, band.h + 300))
     out_png = OUT / "_overlay.png"
     region.save(str(out_png))
     tmp.unlink(missing_ok=True)
@@ -309,8 +374,8 @@ def stage_overlay(frame: np.ndarray, resolver: EntityResolver, offline: bool) ->
         "img": png_uri(img),
         "elapsed": elapsed,
         "cards": [
-            {"name": c.name, "plat": c.price.median if c.price else None, "ducats": c.ducats,
-             "best": c.best, "source": c.price.source if c.price else None}
+            {"name": c.name, "plat": c.price.price if c.price else None, "ducats": c.ducats,
+             "best": c.best, "source": price_basis_label(c.price) if c.price else None}
             for c in cards
         ],
     }
@@ -369,7 +434,7 @@ code, .mono { font-family: var(--font-mono); font-size: 0.84em; }
 .bar .fill { height: 100%; background: var(--void); }
 .bar .n { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
 figure { margin: 0; display: grid; gap: 8px; }
-figure img { border-radius: 6px; border: 1px solid var(--line); display: block; }
+figure img { border-radius: 6px; border: 1px solid var(--line); display: block; max-width: 100%; height: auto; }
 figcaption { font-size: 0.82rem; color: var(--muted); }
 .cv-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
 .cv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
@@ -401,7 +466,49 @@ footer { font-size: 0.8rem; color: var(--muted); border-top: 1px solid var(--lin
 """
 
 
-def render(log, cv, text, market, overlay) -> str:
+def render_live(live: dict) -> str:
+    slots = "".join(
+        f'<div class="cv-cell"><img src="{s["img"]}" alt="Cleaned crop of reward {i + 1}">'
+        f'<span class="ocr">OCR: {esc(s["ocr"])}</span>'
+        + (f'<span class="pill ok">✓ {esc(s["match"])}</span>' if s["match"] else '<span class="pill no">✗ no match</span>')
+        + "</div>"
+        for i, s in enumerate(live["slots"])
+    )
+    rows = []
+    for p in live["prices"]:
+        fixed = f'{p["price"]:g}p' if p["price"] is not None else "–"
+        trades = f'{p["volume"]} in 48 h' if p["basis"] == "trades_48h" else (f'{p["volume"]} in 7 days' if p["volume"] else "–")
+        ratio = f'{p["shown"] / p["price"]:.1f}×' if p["price"] else "–"
+        rows.append(f'<tr><td>{esc(p["name"])}</td><td>{p["shown"]:g}p</td><td>{fixed}</td><td>{trades}</td><td>{ratio}</td></tr>')
+    log_lines = "".join(f"<span>{esc(l)}</span>" for l in live["key_lines"])
+    return f"""<section>
+<div class="stage-head"><span class="eyebrow">Live test · 2026-10-10</span><h2>First run against the real game</h2></div>
+<p>VoidTrace ran during a real 4-player Void Fissure mission on a 2560×1600 laptop screen. The overlay appeared on its own,
+read all four rewards correctly, and priced them. Squad members' names are pixelated.</p>
+<figure><img src="{live['shot']}" alt="Relic reward screen with the VoidTrace overlay showing four price cards">
+<figcaption>Screenshot from the live run. The cards are the first version of the overlay, with the pricing bug described below.</figcaption></figure>
+<h3>What held up</h3>
+<p><b>Trigger.</b> The game wrote <code>ProjectionRewardChoice.lua: Got rewards</code> as the screen opened and
+<code>Relic reward screen shut down</code> {live['window']:.0f} s later, among {live['n_lines']} lines of noise in that window.
+The log also names the player's own reward, which matched slot 1.</p>
+<div class="decoys">{log_lines}</div>
+<p><b>OCR on real pixels.</b> The same screenshot, placed back at its position on the 2560×1600 screen and run offline
+through stage 2: {live['players']} cards detected, {sum(1 for s in live['slots'] if s['match'])} of {len(live['slots'])} names resolved.
+A JPEG copy of the same screenshot resolved only 2 of 4: compression artifacts around the letters are enough to break OCR,
+so captures stay lossless.</p>
+<div class="cv-grid">{slots}</div>
+<h3>What broke</h3>
+<p class="problem"><b>Prices were too high.</b> Burston Prime Blueprint showed 14.5p; it was actually trading near 4p. Pricing from
+the median of in-game asking prices is biased upward (see stage 4). Prices now come from completed trades.</p>
+<div class="scroll"><table><thead><tr><th>Reward</th><th>Shown live</th><th>Fixed price</th><th>Closed trades</th><th>Overstated by</th></tr></thead>
+<tbody>{''.join(rows)}</tbody></table></div>
+<p class="problem"><b>Cards covered the squad's picks.</b> Warframe lists who picked each reward right under its name, which is
+where the cards sat. They now sit below that list, and they close when the log reports the screen shut down instead of
+after a fixed 12 seconds.</p>
+</section>"""
+
+
+def render(log, cv, text, market, overlay, live) -> str:
     h = []
     h.append('<title>VoidTrace Prototype</title>')
     h.append('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>')
@@ -417,8 +524,9 @@ market full of offline sellers and troll prices. This report runs every stage an
 the cleaning step.</p>
 <div class="flow">EE.log ─► 1 log filter ─► 2 capture + image cleaning + OCR ─► 3 text normalize + fuzzy match
                                                                             │
-          overlay ◄─ 5 PyQt6 click-through window ◄─ 4 market orders + IQR outlier purge</div>
+          overlay ◄─ 5 PyQt6 click-through window ◄─ 4 trade history + cleaned listings</div>
 </header>""")
+    h.append(render_live(live))
 
     # Stage 1
     top = log["categories"][0][1] or 1
@@ -428,16 +536,17 @@ the cleaning step.</p>
     )
     decoys = "".join(f"<span>{esc(d)}</span>" for d in log["decoys"])
     h.append(f"""<section>
-<div class="stage-head"><span class="eyebrow">Stage 1 · Event ingestion</span><h2>Finding one line in a hundred thousand</h2></div>
+<div class="stage-head"><span class="eyebrow">Stage 1 · Event ingestion</span><h2>Finding a handful of lines in thousands</h2></div>
 <p>The game writes everything to <code>EE.log</code>. VoidTrace tails it read-only and must fire exactly once when
-the reward screen opens. Data below is this machine's real log.</p>
+the reward screen opens. Data below is this machine's current real log. Ground truth comes from a different line:
+each reward screen ends with its own <code>Relic reward screen shut down</code>.</p>
 <p class="problem"><b>Problem.</b> Matching on the word "reward" fires on vault bonuses, mission decks, session seeds
-and asset loads. In this log, {log['naive']:,} lines mention "reward" and none of them is a reward screen.</p>
+and asset loads. In this log, {log['naive']:,} lines mention "reward", and only {log['real_screens']} reward screens happened.</p>
 <div class="stats">
 <div class="stat"><span class="v">{log['total']:,}</span><span class="k">lines in the real log</span></div>
-<div class="stat bad"><span class="v">{log['naive']:,}</span><span class="k">false triggers from a naive "reward" match</span></div>
-<div class="stat good"><span class="v">{log['strict']}</span><span class="k">false triggers from VoidTrace's filter</span></div>
-<div class="stat gold"><span class="v">{log['injected_hits']} / 2</span><span class="k">real trigger lines found after splicing them into the noise</span></div>
+<div class="stat bad"><span class="v">{log['naive']:,}</span><span class="k">times a naive "reward" match would fire</span></div>
+<div class="stat {'good' if log['events'] == log['real_screens'] else 'bad'}"><span class="v">{log['events']} / {log['real_screens']}</span><span class="k">reward screens detected by VoidTrace's filter</span></div>
+<div class="stat {'good' if log['events'] <= log['real_screens'] else 'bad'}"><span class="v">{max(0, log['events'] - log['real_screens'])}</span><span class="k">false triggers from VoidTrace's filter</span></div>
 </div>
 <div class="bars">{bars}</div>
 <p>The filter checks a substring list (<code>{esc(', '.join(KEYWORDS))}</code>) before any regex runs, so the
@@ -517,28 +626,31 @@ picks one and marks it uncertain; the overlay shows that flag rather than presen
         cards = []
         for m in market:
             st = m["status"]
+            basis = {"trades_48h": "in 48 h", "trades_7d": "in 7 days"}.get(m["basis"], "(none recent; priced from listings)")
+            sell_now = f"{m['sell_now']:g}p" if m["sell_now"] is not None else "–"
             cards.append(f"""<div class="market">
 <div class="market-top"><h3>{esc(m['name'])}</h3>
-<div class="market-nums"><span>naive mean <b>{m['naive_mean']:.1f}p</b></span><span>cheapest listing <b>{m['naive_min']:g}p</b></span>
-<span class="med">VoidTrace median <b>{m['median']:g}p</b></span></div></div>
-<div class="market-nums"><span><b>{m['n_sell']}</b> sell orders</span><span><b>{st.get('ingame', 0)}</b> in game</span>
-<span><b>{st.get('online', 0)}</b> online</span><span><b>{st.get('offline', 0)}</b> offline</span>
-<span>used tier <b>{esc(m['tier'])}</b> ({len(m['tier_prices'])} prices)</span><span><b>{len(m['outliers'])}</b> outliers purged</span></div>
+<div class="market-nums"><span>cheapest listing <b>{m['naive_min']:g}p</b></span><span>median ask (old) <b>{m['ask_median']:g}p</b></span>
+<span>buy now <b>{sell_now}</b></span><span class="med">VoidTrace price <b>{m['price']:g}p</b></span></div></div>
+<div class="market-nums"><span><b>{m['volume']}</b> closed trades {basis}</span><span><b>{m['n_sell']}</b> sell orders</span>
+<span><b>{st.get('ingame', 0)}</b> in game</span><span><b>{st.get('offline', 0)}</b> offline</span>
+<span><b>{len(m['outliers'])}</b> outliers purged</span></div>
 {strip_svg(m)}</div>""")
         offline_share = sum(m["status"].get("offline", 0) for m in market) / max(1, sum(m["n_sell"] for m in market))
         h.append(f"""<section>
 <div class="stage-head"><span class="eyebrow">Stage 4 · Market sanitizer</span><h2>A price you could actually trade at</h2></div>
-<p>Live sell orders from Warframe.Market, fetched when this report was generated.</p>
-<p class="problem"><b>Problem.</b> {offline_share:.0%} of these sell orders belong to sellers who are offline, and the list
-includes lowball troll listings and price-gouging ones. The cheapest listing is usually unreachable, and the mean is
-dragged by the extremes.</p>
-<p>VoidTrace keeps sellers who are in game, widening to online and then everyone only when fewer than 5 remain. It
-drops prices outside Tukey's fences (Q1 − 1.5·IQR, Q3 + 1.5·IQR, with the IQR floored at 10% of the median),
-and reports the median of the rest.</p>
-<div class="legend"><span><i style="background:var(--void)"></i>price in the chosen seller tier</span>
-<span><i style="background:var(--bad)"></i>purged outlier</span><span><i style="background:var(--muted);opacity:.4"></i>other sellers (not used)</span>
-<span><i class="line" style="background:var(--gold)"></i>median</span><span><i class="line" style="background:var(--bad)"></i>naive mean</span>
-<span><i style="background:var(--gold-soft);border:1px solid var(--gold);border-radius:2px"></i>kept range</span></div>
+<p>Live Warframe.Market data for the four rewards from the live test, fetched when this report was generated.</p>
+<p class="problem"><b>Problem.</b> {offline_share:.0%} of sell orders belong to offline sellers. Among the sellers who are
+in game, cheap listings sell and disappear while overpriced ones linger, so the median <em>asking</em> price drifts upward.
+In the live test it priced Burston Prime Blueprint at 14.5p.</p>
+<p>VoidTrace now prices from completed trades: the volume-weighted median of closed-trade medians over the last 48 hours,
+or the last 7 days for slow items. Listings are the fallback and the "buy now" figure: in-game sellers first, outliers
+dropped with Tukey's fences on log prices (a linear lower fence goes negative and never catches lowball trolls), then
+the median of the five cheapest asks that remain.</p>
+<div class="legend"><span><i style="background:var(--void)"></i>in-game ask</span>
+<span><i style="background:var(--bad)"></i>purged outlier</span><span><i style="background:var(--muted);opacity:.4"></i>offline ask (not used)</span>
+<span><i class="line" style="background:var(--gold)"></i>VoidTrace price (trades)</span><span><i class="line" style="background:var(--bad)"></i>median ask (old method)</span>
+<span><i style="background:var(--gold-soft);border:1px solid var(--gold);border-radius:2px"></i>kept asks</span></div>
 {''.join(cards)}
 </section>""")
 
@@ -560,21 +672,24 @@ and reports the median of the rest.</p>
 always-on-top window that ignores mouse input, so clicks pass through to Warframe.</p>
 <figure><img src="{overlay['img']}" alt="Overlay cards drawn under the reward names on the synthetic screen">
 <figcaption>Rendered offscreen at 1920×1080. Gold border marks the most valuable pick.</figcaption></figure>
-<div class="scroll"><table><thead><tr><th>Slot</th><th>Item</th><th>Platinum</th><th>Ducats</th><th>Seller tier</th><th></th></tr></thead>
+<div class="scroll"><table><thead><tr><th>Slot</th><th>Item</th><th>Platinum</th><th>Ducats</th><th>Price basis</th><th></th></tr></thead>
 <tbody>{crow}</tbody></table></div>
 </section>""")
 
     h.append("""<section>
 <div class="stage-head"><span class="eyebrow">Status</span><h2>Open problems</h2></div>
 <ul class="limits">
-<li><b>Reward-screen trigger not yet seen live.</b> The log markers ("Pause countdown done", "Got rewards") come from WFInfo,
-the established open-source tool. This machine's log has no relic run yet, so the filter is proven only on spliced lines.</li>
-<li><b>Vision tested on synthetic screens only.</b> Crop geometry follows WFInfo's reference layout. Real captures may differ
-with UI scale, themes, HDR or non-English fonts.</li>
+<li><b>One live run so far.</b> Trigger, OCR and layout are confirmed on one 4-player relic screen at 2560×1600,
+100% UI scale. Other resolutions, UI scales, themes and non-English clients are untested.</li>
+<li><b>The name crop also catches item art.</b> The crop band reaches above one-line names into the item picture, which
+adds junk to the OCR text. Fuzzy matching absorbs it today; detecting the text row first would make it robust.</li>
+<li><b>New card position not yet seen live.</b> Cards now sit below the squad's pick list and close with the screen;
+both are covered by tests but need a second live run.</li>
+<li><b>Trade history uses a legacy endpoint.</b> Closed-trade statistics come from Warframe.Market's v1 API. If it
+goes away, prices fall back to the cleaned listings automatically.</li>
 <li><b>Truncated reads are ambiguous.</b> When OCR returns only part of a name, several items fit. These are flagged, not solved.</li>
-<li><b>Thin markets.</b> Many parts have fewer than 5 sellers in game, so the price falls back to a wider, less reliable tier.
-The overlay shows which tier was used.</li>
-<li><b>Capture timing is a guess.</b> The screenshot is taken 1.5 s after the trigger while the cards animate in.</li>
+<li><b>Unused ground truth.</b> The log names the player's own reward (<code>gets reward …/BratonPrimeStock</code>).
+It could cross-check one OCR slot per run.</li>
 </ul>
 </section>""")
     h.append(f'<footer>Generated by <code>demo.py</code> on {time.strftime("%Y-%m-%d %H:%M")}. Market data: Warframe.Market public API. '
@@ -601,9 +716,11 @@ def main(argv=None) -> int:
     market = stage_market(args.offline)
     print("stage 5: end to end + overlay...")
     overlay = stage_overlay(cv.pop("frame_raw"), resolver, args.offline)
+    print("live test: real screenshot + log excerpt...")
+    live = stage_live(resolver, market)
 
     report = OUT / "report.html"
-    report.write_text(render(log, cv, text, market, overlay), encoding="utf-8")
+    report.write_text(render(log, cv, text, market, overlay, live), encoding="utf-8")
     print(f"wrote {report} ({report.stat().st_size / 1024:.0f} KB)")
     return 0
 

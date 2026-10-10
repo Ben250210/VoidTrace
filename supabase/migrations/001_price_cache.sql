@@ -1,16 +1,16 @@
 -- VoidTrace shared price cache. Holds only public Warframe.Market aggregates.
 create table if not exists public.price_cache (
-    slug        text primary key,
-    median      double precision not null,
-    q1          double precision not null,
-    q3          double precision not null,
-    low         double precision not null,
-    high        double precision not null,
-    n_orders    integer not null,
-    n_kept      integer not null,
-    n_outliers  integer not null,
-    source      text not null check (source in ('ingame', 'online', 'all')),
-    fetched_at  double precision not null  -- unix seconds, matches PriceStats.fetched_at
+    slug          text primary key,
+    price         double precision not null,  -- headline price
+    basis         text not null check (basis in ('trades_48h', 'trades_7d', 'listings')),
+    trade_volume  integer not null,
+    sell_now      double precision,
+    low           double precision,
+    high          double precision,
+    n_orders      integer not null,
+    n_outliers    integer not null,
+    source        text not null check (source in ('ingame', 'online', 'all', 'none')),
+    fetched_at    double precision not null  -- unix seconds, matches PriceStats.fetched_at
 );
 
 alter table public.price_cache enable row level security;

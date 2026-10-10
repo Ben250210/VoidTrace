@@ -18,11 +18,13 @@ from typing import Callable, Optional
 log = logging.getLogger(__name__)
 
 # Keyword prefilter: cheap substring checks run before the regex.
-# Same markers WFInfo (github.com/WFCD/WFinfo, Data.cs) uses to detect the relic
-# reward screen. Not yet observed in this machine's EE.log; confirm with
-# tools/sample_log_lines.py after a relic run.
+# Same markers WFInfo (github.com/WFCD/WFinfo, Data.cs) uses to detect the relic reward
+# screen. "ProjectionRewardChoice.lua: Got rewards" was confirmed in a live relic run on
+# 2026-10-10; "Pause countdown done" is kept from WFInfo but has not been seen here yet.
 KEYWORDS: tuple[str, ...] = ("Pause countdown done", "Got rewards")
 TRIGGER_RE = re.compile(r"\b(?:Pause countdown done|Got rewards)\b")
+# Written when the reward screen closes (confirmed in the same live run).
+CLOSE_KEYWORDS: tuple[str, ...] = ("Relic reward screen shut down",)
 
 
 def default_log_path() -> Path:
@@ -38,6 +40,11 @@ def is_reward_screen_line(line: str) -> bool:
     if not any(keyword in line for keyword in KEYWORDS):
         return False
     return TRIGGER_RE.search(line) is not None
+
+
+def is_reward_screen_close(line: str) -> bool:
+    """True if a log line indicates the reward screen closed."""
+    return any(keyword in line for keyword in CLOSE_KEYWORDS)
 
 
 class LogTailer:
@@ -155,6 +162,7 @@ class DebouncedFilter:
 class RewardScreenEvent:
     timestamp: datetime
     raw_line: str
+    kind: str = "open"  # "open" when the reward screen appears, "close" when it shuts down
 
 
 class LogWatcher:
@@ -192,10 +200,14 @@ class LogWatcher:
     def _run(self) -> None:
         for line in self._tailer.lines(self._stop):
             self.lines_seen += 1
-            if not self._filter.accept(line, self._clock()):
+            if is_reward_screen_close(line):
+                kind = "close"
+            elif self._filter.accept(line, self._clock()):
+                kind = "open"
+            else:
                 continue
             self.events_emitted += 1
-            event = RewardScreenEvent(timestamp=datetime.now(), raw_line=line)
+            event = RewardScreenEvent(timestamp=datetime.now(), raw_line=line, kind=kind)
             try:
                 self._on_event(event)
             except Exception:

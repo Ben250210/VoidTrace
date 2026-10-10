@@ -11,7 +11,7 @@ import argparse
 import sys
 
 from voidtrace.items import load_items
-from voidtrace.price_cleaner import PriceService
+from voidtrace.price_cleaner import PriceService, price_basis_label
 from voidtrace.text_cleaner import EntityResolver
 
 
@@ -43,11 +43,12 @@ def main(argv: list[str] | None = None) -> int:
             continue
         ducat_text = f", {ducats} ducats" if ducats is not None else ""
         stale = " [STALE]" if stats.stale else ""
-        print(
-            f"{label}: {stats.median:g}p median{ducat_text}{stale}\n"
-            f"    {stats.source} sellers: {stats.n_orders} orders, {stats.n_outliers} outliers purged, "
-            f"kept range {stats.low:g}-{stats.high:g}p"
-        )
+        print(f"{label}: {stats.price:g}p ({price_basis_label(stats)}){ducat_text}{stale}")
+        if stats.sell_now is not None:
+            print(
+                f"    buy now {stats.sell_now:g}p from {stats.source} sellers: {stats.n_orders} asks, "
+                f"{stats.n_outliers} outliers purged, kept {stats.low:g}-{stats.high:g}p"
+            )
     return 0
 
 

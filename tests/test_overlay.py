@@ -22,7 +22,7 @@ PRICES = {"nekros_prime_blueprint": 30.0, "braton_prime_stock": 4.0}
 
 
 def stats(slug, median, stale=False):
-    return PriceStats(slug, median, median, median, median, median, 5, 5, 0, "ingame", time.time(), stale)
+    return PriceStats(slug, median, "trades_48h", 10, median, median, median, 5, 0, "ingame", time.time(), stale)
 
 
 class FakePrices:
@@ -82,7 +82,8 @@ def test_overlay_cards_sit_below_reward_names_at_1080p(qapp):
     overlay = OverlayWindow(QRect(0, 0, 1920, 1080))
     rects = overlay.layout_cards(4)
     assert len(rects) == 4
-    assert all(r.top() >= 500 for r in rects)          # band bottom is y=500 at 1080p
+    # Name band ends at y=500 at 1080p; the squad-pick list under it takes ~110 px.
+    assert all(r.top() >= 610 for r in rects)
     centers = [r.center().x() for r in rects]
     assert centers == pytest.approx([597, 839, 1081, 1323], abs=2)
 
@@ -122,7 +123,7 @@ def test_overlay_is_click_through(qapp):
 
 def test_cards_summary_lists_each_slot():
     text = cards_summary(sample_cards())
-    assert "slot 0: Nekros Prime Blueprint 30p 65d *" in text
+    assert "slot 0: Nekros Prime Blueprint 30p (10 sold / 48h) 65d *" in text
     assert "slot 3: <unreadable>" in text
 
 
@@ -157,7 +158,16 @@ def test_log_trigger_drives_overlay(qapp, tmp_path):
         while not overlay.cards and time.monotonic() < deadline:
             qapp.processEvents()
             time.sleep(0.01)
+        assert [c.name for c in overlay.cards] == ["Nekros Prime Blueprint", "Forma Blueprint"]
+
+        # The game's close line hides the overlay right away.
+        with open(log, "a", encoding="utf-8") as fh:
+            fh.write("26.7 Script [Info]: ProjectionRewardChoice.lua: Relic reward screen shut down\n")
+        deadline = time.monotonic() + 3
+        while overlay.cards and time.monotonic() < deadline:
+            qapp.processEvents()
+            time.sleep(0.01)
+        assert overlay.cards == [] and not overlay.isVisible()
     finally:
         watcher.stop()
         controller.shutdown()
-    assert [c.name for c in overlay.cards] == ["Nekros Prime Blueprint", "Forma Blueprint"]

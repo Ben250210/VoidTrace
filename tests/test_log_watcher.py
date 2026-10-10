@@ -211,3 +211,40 @@ def _wait_for(predicate, timeout: float = 2.0) -> None:
             return
         time.sleep(0.01)
     raise AssertionError("condition not met before timeout")
+
+
+def test_watcher_emits_close_event_without_debounce(tmp_path):
+    log = tmp_path / "EE.log"
+    log.write_text("", encoding="utf-8")
+    events: list[RewardScreenEvent] = []
+    watcher = LogWatcher(log, on_event=events.append, debounce=5.0, poll_interval=0.01)
+    watcher.start()
+    try:
+        time.sleep(0.05)
+        _append(log, "ProjectionRewardChoice.lua: Got rewards\n"
+                     "ProjectionRewardChoice.lua: Selection countdown done\n"
+                     "ProjectionRewardChoice.lua: Relic reward screen shut down\n")
+        _wait_for(lambda: watcher.lines_seen >= 3)
+    finally:
+        watcher.stop()
+    assert [e.kind for e in events] == ["open", "close"]
+
+
+def test_close_line_is_not_an_open_trigger():
+    from voidtrace.log_watcher import is_reward_screen_close
+
+    line = "541.721 Script [Info]: ProjectionRewardChoice.lua: Relic reward screen shut down"
+    assert is_reward_screen_close(line) and not is_reward_screen_line(line)
+
+
+def test_real_log_excerpt_yields_one_open_and_one_close():
+    """Redacted EE.log lines from the first live relic run (2026-10-10)."""
+    from voidtrace.log_watcher import is_reward_screen_close
+
+    lines = (ROOT / "tests" / "fixtures" / "live_2026-10-10_EE_excerpt.log").read_text(encoding="utf-8").splitlines()
+    filt = DebouncedFilter(debounce=5.0)
+    opens = [line for line in lines if filt.accept(line, now=float(line.split()[0]))]
+    closes = [line for line in lines if is_reward_screen_close(line)]
+    assert [l.split(": ", 1)[1] for l in opens] == ["ProjectionRewardChoice.lua: Got rewards"]
+    assert len(closes) == 1
+    assert len(lines) > 50  # the rest is noise the filter must reject

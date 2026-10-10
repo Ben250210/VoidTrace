@@ -1,0 +1,56 @@
+329.665 Sys [Info]: LotusSentinelAvatar with ID 4037 died of natural causes. Source of damage was NULL source, source object type was NULL source object type
+329.761 Sys [Info]: VoidProjections: <id> gets reward /Lotus/StoreItems/Types/Recipes/Components/FormaBlueprint
+329.761 Sys [Info]: VoidProjections: Client got reward info from <id>
+329.761 Sys [Info]: VoidProjections: Still waiting on response from <id>
+329.761 Sys [Info]: VoidProjections: Still waiting on response from <id>
+329.761 Sys [Info]: VoidProjections: Still waiting on response from <id>
+329.761 Sys [Info]: VoidProjections: Sending reward info from <id> to host!
+330.058 Sys [Info]: VoidProjections: Client got reward info from <id>
+330.058 Sys [Info]: VoidProjections: Still waiting on response from <id>
+330.058 Sys [Info]: VoidProjections: Still waiting on response from <id>
+330.115 Sys [Info]: VoidProjections: Client got reward info from <id>
+330.115 Sys [Info]: VoidProjections: Still waiting on response from <id>
+330.225 Sys [Info]: VoidProjections: Client got reward info from <id>
+330.225 Sys [Info]: VoidProjections: Client has reward info for all players now
+330.225 Script [Info]: ProjectionsCountdown.lua: Relic timer closed
+330.225 Script [Info]: ProjectionRewardChoice.lua: Got rewards
+330.226 Sys [Info]: Created /Lotus/Interface/ProjectionsCountdown.swf
+330.226 Sys [Info]: ResourceLoader 0x<addr> (4 root types) Found 10 items to load (0ms) [Heap: 861,162,976/917,504,000 Footprint: 4,880,510,976 Handles: 2,238]
+330.226 Sys [Info]: 1 unique static loader(s) running
+330.227 Script [Info]: ProjectionRewardChoice.lua: Missing icon data!
+330.228 Script [Info]: ProjectionRewardChoice.lua: Missing icon data!
+330.229 Script [Info]: ProjectionRewardChoice.lua: Missing icon data!
+330.230 Script [Info]: ProjectionRewardChoice.lua: Missing icon data!
+330.230 Script [Info]: ProjectionsCountdown.lua: Initialize timer nil	15
+330.238 Sys [Info]: Resloader 0x<addr> (4 root types) starting
+330.238 Sys [Info]: Resource load completed 0x<addr> (4 root types) in one pass and 0.0s (I/O ~= 0.0%, inherited 10 of 10)
+332.148 Sys [Info]: WM_ACTIVATEAPP 1
+332.156 Input [Info]: New gamepad 0 is connected, UserNumber 0 
+332.156 Input [Info]: New gamepad 1 is connected, UserNumber 1 
+332.156 Input [Info]: New gamepad 2 is connected, UserNumber 2 
+332.156 Input [Info]: New gamepad 3 is connected, UserNumber 3 
+333.154 Sys [Info]: LotusSentinelAvatar with ID 4042 died of natural causes. Source of damage was NULL source, source object type was NULL source object type
+333.569 Sys [Info]: WM_ACTIVATEAPP 0
+336.857 Sys [Info]: WM_ACTIVATEAPP 1
+336.869 Input [Info]: New gamepad 0 is connected, UserNumber 0 
+336.869 Input [Info]: New gamepad 1 is connected, UserNumber 1 
+336.869 Input [Info]: New gamepad 2 is connected, UserNumber 2 
+336.869 Input [Info]: New gamepad 3 is connected, UserNumber 3 
+336.870 Sys [Info]: CheckEntitlements started!
+336.870 Sys [Info]: EntitlementsSteam::CheckEntitlements()
+336.879 Sys [Info]: OnEntitlementServiceComplete false:
+339.094 Sys [Info]: WM_ACTIVATEAPP 0
+341.065 Sys [Info]: client received full cache!
+344.181 Sys [Info]: WM_ACTIVATEAPP 1
+344.184 Input [Info]: New gamepad 0 is connected, UserNumber 0 
+344.184 Input [Info]: New gamepad 1 is connected, UserNumber 1 
+344.184 Input [Info]: New gamepad 2 is connected, UserNumber 2 
+344.184 Input [Info]: New gamepad 3 is connected, UserNumber 3 
+344.491 Sys [Info]: WM_ACTIVATEAPP 0
+345.224 Script [Info]: ProjectionsCountdown.lua: Countdown timer expired
+345.225 Script [Info]: ProjectionsCountdown.lua: Relic timer closed
+345.225 Script [Info]: ProjectionRewardChoice.lua: Selection countdown done
+345.225 Script [Info]: ProjectionsCountdown.lua: Initialize timer nil	0
+345.225 Script [Info]: ProjectionRewardChoice.lua: Relic reward screen shut down
+345.233 Input [Info]: InitMapping for all devices with bindings /Configs/EE.cfg/LotusWindows_KeyBindings and filter /Lotus/Types/Player/TennoEquippedMeleeFilter
+345.237 Input [Info]: Subscribing for /Lotus/Interface/ChatRedux.swf with input filter /EE/Types/Input/MenuInputFilter

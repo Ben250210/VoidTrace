@@ -12,6 +12,7 @@ from typing import Any, Optional
 import requests
 
 API_BASE = "https://api.warframe.market/v2"
+API_BASE_V1 = "https://api.warframe.market/v1"
 HEADERS = {
     "Accept": "application/json",
     "Language": "en",
@@ -29,12 +30,20 @@ class MarketClient:
         self._last_request = 0.0
 
     def get(self, path: str) -> Any:
-        """GET {API_BASE}{path} and return the `data` field of the JSON envelope."""
+        """GET {API_BASE}{path} (v2) and return the `data` field of the JSON envelope."""
+        return self._get(API_BASE + path)["data"]
+
+    def get_v1(self, path: str) -> Any:
+        """GET a legacy v1 endpoint and return its `payload`. Used for closed-trade statistics,
+        which v2 does not expose."""
+        return self._get(API_BASE_V1 + path)["payload"]
+
+    def _get(self, url: str) -> Any:
         with self._lock:
             wait = MIN_INTERVAL - (time.monotonic() - self._last_request)
             if wait > 0:
                 time.sleep(wait)
             self._last_request = time.monotonic()
-        resp = self.session.get(API_BASE + path, headers=HEADERS, timeout=self.timeout)
+        resp = self.session.get(url, headers=HEADERS, timeout=self.timeout)
         resp.raise_for_status()
-        return resp.json()["data"]
+        return resp.json()

@@ -19,13 +19,13 @@ from voidtrace.log_watcher import (
     LogWatcher,
     RewardScreenEvent,
     default_log_path,
-    is_reward_screen_line,
 )
 
 
 def _print_event(event: RewardScreenEvent) -> None:
     stamp = event.timestamp.strftime("%H:%M:%S.") + f"{event.timestamp.microsecond // 1000:03d}"
-    print(f"[{stamp}] REWARD SCREEN", flush=True)
+    label = "REWARD SCREEN" if event.kind == "open" else "reward screen closed"
+    print(f"[{stamp}] {label}", flush=True)
 
 
 def run_replay(path: Path) -> int:

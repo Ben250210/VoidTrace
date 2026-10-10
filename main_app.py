@@ -37,7 +37,8 @@ class Controller(QObject):
     """Moves work off the UI thread and results back onto it via queued signals."""
 
     triggered = pyqtSignal()
-    results_ready = pyqtSignal(list)
+    closed = pyqtSignal()
+    results_ready = pyqtSignal(int, list)
     failed = pyqtSignal(str)
 
     def __init__(self, pipeline: RewardPipeline, overlay: OverlayWindow, capture_delay_ms: int) -> None:
@@ -47,14 +48,24 @@ class Controller(QObject):
         self.capture_delay_ms = capture_delay_ms
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.busy = False
+        self.generation = 0  # bumped on close so late results from a closed screen are dropped
         self.triggered.connect(self._on_trigger)
+        self.closed.connect(self._on_close)
         self.results_ready.connect(self._on_results)
         self.failed.connect(lambda msg: log.error("pipeline failed: %s", msg))
 
     def on_log_event(self, event: RewardScreenEvent) -> None:
         """Called on the log-watcher thread. Signals are thread-safe."""
+        if event.kind == "close":
+            log.info("reward screen closed")
+            self.closed.emit()
+            return
         log.info("reward screen detected: %s", event.raw_line.strip())
         self.triggered.emit()
+
+    def _on_close(self) -> None:
+        self.generation += 1
+        self.overlay.clear()
 
     def _on_trigger(self) -> None:
         # The reward cards animate in; wait before capturing.
@@ -64,11 +75,11 @@ class Controller(QObject):
         if self.busy:
             return
         self.busy = True
-        self.executor.submit(self._work, frame)
+        self.executor.submit(self._work, frame, self.generation)
 
-    def _work(self, frame) -> None:
+    def _work(self, frame, generation: int) -> None:
         try:
-            self.results_ready.emit(self.pipeline.run(frame))
+            self.results_ready.emit(generation, self.pipeline.run(frame))
         except TesseractNotFound as exc:
             self.failed.emit(str(exc))
         except Exception as exc:  # keep the app alive whatever a phase does
@@ -77,8 +88,11 @@ class Controller(QObject):
         finally:
             self.busy = False
 
-    def _on_results(self, cards: list[RewardCard]) -> None:
+    def _on_results(self, generation: int, cards: list[RewardCard]) -> None:
         log.info("rewards:\n%s", cards_summary(cards))
+        if generation != self.generation:
+            log.info("reward screen already closed; not showing")
+            return
         self.overlay.show_cards(cards)
 
     def shutdown(self) -> None:
@@ -106,7 +120,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--ui-scale", type=float, default=1.0, help="in-game UI scale, 1.0 = 100%%")
     parser.add_argument("--monitor", type=int, default=1, help="monitor to capture (1 = primary)")
     parser.add_argument("--delay", type=float, default=1.5, help="seconds between trigger and capture")
-    parser.add_argument("--hide-after", type=float, default=12.0, help="seconds the overlay stays up")
+    parser.add_argument("--hide-after", type=float, default=20.0,
+                        help="fallback: seconds the overlay stays up if the close line is missed")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
 

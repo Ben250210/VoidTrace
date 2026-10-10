@@ -29,7 +29,7 @@ class RewardCard:
 
     @property
     def platinum(self) -> float:
-        return self.price.median if self.price else 0.0
+        return self.price.price if self.price else 0.0
 
 
 class RewardPipeline:
