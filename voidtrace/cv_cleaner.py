@@ -158,6 +158,20 @@ def text_mask(img: np.ndarray) -> np.ndarray:
     return preprocess(img, upscale=1.0, pad=0) == 0
 
 
+def band_text_signature(band_img: np.ndarray, polarity: Optional[str] = None) -> tuple[np.ndarray, float]:
+    """(text mask, mean text strength) for the reward-name band, used to tell when names stop fading in.
+
+    Only text pixels count: the live 3D background behind the reward screen keeps moving (measured
+    20-55 grey levels of change between grabs), so whole-image differences never settle.
+    """
+    gray = cv2.cvtColor(band_img, cv2.COLOR_BGR2GRAY) if band_img.ndim == 3 else band_img
+    flat = flatten_illumination(cv2.GaussianBlur(gray, (3, 3), 0), polarity)
+    _, binary = cv2.threshold(flat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    mask = remove_specks(binary) > 0
+    strength = float(flat[mask].mean()) if mask.any() else 0.0
+    return mask, strength
+
+
 def detect_player_count(band_img: np.ndarray) -> int:
     """Guess squad size from where text sits in the reward band.
 

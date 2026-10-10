@@ -20,6 +20,18 @@ from .text_cleaner import EntityResolver, Resolution
 
 log = logging.getLogger(__name__)
 
+# Waiting for the reward cards to finish fading in (live test 4 read Burston Prime Barrel as Strun
+# Prime Barrel from a frame grabbed mid-fade). The name band is grabbed repeatedly; once two grabs
+# in a row barely differ, the screen has settled.
+SETTLE_STEP_S = 0.12
+SETTLE_TIMEOUT_S = 2.5
+SETTLE_MIN_IOU = 0.85      # text masks of consecutive grabs must overlap this much
+SETTLE_MAX_STRENGTH_CHANGE = 0.05  # and text brightness change less than 5%
+SETTLE_MIN_TEXT = 0.01     # at least 1% of the band must be text before it can count as settled
+SETTLE_STABLE_GRABS = 2
+RETRY_DELAY_S = 0.6        # second look when a card is unreadable or uncertain
+MAX_RETRIES = 2
+
 
 class PipelineSkipped(Exception):
     """The pipeline decided not to show anything (wrong window, nothing recognised)."""
@@ -68,15 +80,23 @@ class RewardPipeline:
     def read(self, frame: Optional[np.ndarray] = None) -> list[RewardCard]:
         """Capture (unless given a frame), OCR and resolve. Prices are left pending."""
         t0 = time.perf_counter()
-        if frame is None:
+        live = frame is None
+        if live:
             if self.foreground_check is not None and not self.foreground_check():
                 raise PipelineSkipped("Warframe is not the active window")
-            frame = self.capture()
+            frame = self.capture_settled()
         t1 = time.perf_counter()
         texts = self.read_texts(frame, self.players, self.ui_scale)
-        t2 = time.perf_counter()
         resolutions = self.resolver.resolve_all(texts)
-        log.info("timing: capture %.2fs, OCR %.2fs, resolve %.2fs", t1 - t0, t2 - t1, time.perf_counter() - t2)
+        log.info("timing: capture %.2fs, OCR + resolve %.2fs", t1 - t0, time.perf_counter() - t1)
+        retries = 0
+        while live and retries < MAX_RETRIES and any(_weak(r) for r in resolutions):
+            retries += 1
+            time.sleep(RETRY_DELAY_S)
+            again = self.resolver.resolve_all(self.read_texts(self.capture(), self.players, self.ui_scale))
+            if len(again) == len(resolutions):
+                resolutions = [_better(old, new) for old, new in zip(resolutions, again)]
+            log.info("second look %d: %d weak card(s) left", retries, sum(_weak(r) for r in resolutions))
         if not any(res.item for res in resolutions):
             raise PipelineSkipped(f"no reward names recognised in {len(texts)} slots")
         cards = [
@@ -84,6 +104,29 @@ class RewardPipeline:
             for slot, res in enumerate(resolutions)
         ]
         return mark_best(cards)
+
+    def capture_settled(self) -> np.ndarray:
+        """Capture once the reward names stop changing (cards finished fading in)."""
+        t0 = time.perf_counter()
+        prev, stable, frame, polarity = None, 0, None, None
+        while True:
+            frame = self.capture()
+            if polarity is None:  # decided once: per-grab decisions can flip on a busy background
+                polarity = cv_cleaner.text_polarity(_band(frame, self.ui_scale), upscale=1.0)
+            sig = cv_cleaner.band_text_signature(_band(frame, self.ui_scale), polarity)
+            if prev is not None and _settled(prev, sig):
+                stable += 1
+                if stable >= SETTLE_STABLE_GRABS:
+                    break
+            else:
+                stable = 0
+            if time.perf_counter() - t0 > SETTLE_TIMEOUT_S:
+                log.info("names did not settle within %.1fs; reading anyway", SETTLE_TIMEOUT_S)
+                break
+            prev = sig
+            time.sleep(SETTLE_STEP_S)
+        log.info("timing: names settled after %.2fs", time.perf_counter() - t0)
+        return frame
 
     def price_cards(
         self,
@@ -114,6 +157,30 @@ class RewardPipeline:
 
     def run(self, frame: Optional[np.ndarray] = None) -> list[RewardCard]:
         return self.price_cards(self.read(frame))
+
+
+def _band(frame: np.ndarray, ui_scale: float) -> np.ndarray:
+    h, w = frame.shape[:2]
+    return cv_cleaner.crop(frame, cv_cleaner.reward_band(w, h, ui_scale))
+
+
+def _settled(prev: tuple[np.ndarray, float], cur: tuple[np.ndarray, float]) -> bool:
+    (m0, s0), (m1, s1) = prev, cur
+    if m0.shape != m1.shape or m1.mean() < SETTLE_MIN_TEXT or s0 <= 0:
+        return False
+    iou = np.logical_and(m0, m1).sum() / max(1, np.logical_or(m0, m1).sum())
+    return iou >= SETTLE_MIN_IOU and abs(s1 - s0) / s0 < SETTLE_MAX_STRENGTH_CHANGE
+
+
+def _weak(res: Resolution) -> bool:
+    return res.item is None or res.ambiguous
+
+
+def _better(old: Resolution, new: Resolution) -> Resolution:
+    """Keep the stronger of two reads of the same slot: confident beats uncertain beats none."""
+    def rank(r: Resolution) -> tuple:
+        return (r.item is not None, not r.ambiguous, r.score)
+    return new if rank(new) > rank(old) else old
 
 
 def mark_best(cards: list[RewardCard]) -> list[RewardCard]:

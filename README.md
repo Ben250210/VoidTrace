@@ -87,4 +87,6 @@ Cards arrived with 3 s left, then on the Mission Complete screen with OCR of a t
 
 - Other resolutions, UI scales, themes and non-English clients.
 - The live-test-2 fixes and the card position below the squad list, which need a third live run.
-- The 1.0 s capture delay is a starting value (`--delay`).
+- Capture waits until the names stop fading in (text-only check, since the 3D background keeps moving;
+  capped at 2.5 s), then takes a second look at any unreadable or uncertain card. Both are tested offline
+  on real name bands, not yet live.

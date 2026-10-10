@@ -147,7 +147,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--players", type=int, default=None, help="squad size (default: detect)")
     parser.add_argument("--ui-scale", type=float, default=1.0, help="in-game UI scale, 1.0 = 100%%")
     parser.add_argument("--monitor", type=int, default=1, help="monitor to capture (1 = primary)")
-    parser.add_argument("--delay", type=float, default=1.0, help="seconds between trigger and capture")
+    parser.add_argument("--delay", type=float, default=0.4,
+                        help="seconds before checking whether the cards have finished fading in")
     parser.add_argument("--source", choices=["auto", "debug", "file"], default="auto",
                         help="log source: live debug output (real time) or the EE.log file")
     parser.add_argument("--any-window", action="store_true",

@@ -3,6 +3,8 @@ import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import cv2
+import numpy as np
 import pytest
 from PyQt6.QtCore import QRect
 from PyQt6.QtWidgets import QApplication
@@ -34,6 +36,19 @@ class FakePrices:
         return stats(slug, PRICES[slug]) if slug in PRICES else None
 
 
+# A blank 1080p screenshot: the settle check needs a real image, read_texts is faked anyway.
+BLANK = np.zeros((1080, 1920, 3), np.uint8)
+
+
+@pytest.fixture(autouse=True)
+def fast_pipeline(monkeypatch):
+    import voidtrace.pipeline as pipeline_module
+
+    monkeypatch.setattr(pipeline_module, "SETTLE_STEP_S", 0.0)
+    monkeypatch.setattr(pipeline_module, "RETRY_DELAY_S", 0.0)
+    monkeypatch.setattr(pipeline_module, "SETTLE_TIMEOUT_S", 0.2)  # blank test frames never settle
+
+
 @pytest.fixture(scope="module")
 def qapp():
     return QApplication.instance() or QApplication([])
@@ -46,7 +61,7 @@ def test_pipeline_runs_all_phases_and_marks_best():
     pipeline = RewardPipeline(
         EntityResolver(ITEMS),
         prices,
-        capture=lambda: "frame",
+        capture=lambda: BLANK,
         read_texts=lambda frame, players, ui_scale: ["BRAT0N PRIME STOCK", "NEKROS PRIME BLUEPRINT", "FORMA BLUEPRINT", "~~"],
     )
     cards = pipeline.run()
@@ -140,7 +155,7 @@ def test_log_trigger_drives_overlay(qapp, tmp_path):
     from voidtrace.log_watcher import LogWatcher
 
     pipeline = RewardPipeline(
-        EntityResolver(ITEMS), FakePrices(), capture=lambda: "frame",
+        EntityResolver(ITEMS), FakePrices(), capture=lambda: BLANK,
         read_texts=lambda frame, players, ui_scale: ["NEKROS PRIME BLUEPRINT", "FORMA BLUEPRINT"],
     )
     overlay = OverlayWindow(QRect(0, 0, 1920, 1080))
@@ -201,14 +216,14 @@ def test_pipeline_skips_when_nothing_is_recognised():
 
     # What the end screen + terminal produced in live test 2.
     junk = ["ly Wv Wards", "Oading Item List Latching Users", "Appdata Local Warfra Script Inf"]
-    pipeline = RewardPipeline(EntityResolver(ITEMS), FakePrices(), capture=lambda: "frame",
+    pipeline = RewardPipeline(EntityResolver(ITEMS), FakePrices(), capture=lambda: BLANK,
                               read_texts=lambda *a: junk)
     with pytest.raises(PipelineSkipped):
         pipeline.read()
 
 
 def test_prices_arrive_progressively():
-    pipeline = RewardPipeline(EntityResolver(ITEMS), FakePrices(), capture=lambda: "frame",
+    pipeline = RewardPipeline(EntityResolver(ITEMS), FakePrices(), capture=lambda: BLANK,
                               read_texts=lambda *a: ["BRATON PRIME STOCK", "NEKROS PRIME BLUEPRINT", "FORMA BLUEPRINT"])
     cards = pipeline.read()
     assert [c.pending for c in cards] == [True, True, False]  # Forma is untradable: nothing to fetch
@@ -222,7 +237,7 @@ def test_prices_arrive_progressively():
 def test_close_during_capture_delay_cancels_capture(qapp):
     main_app = _load_main_app()
     captures = []
-    pipeline = RewardPipeline(EntityResolver(ITEMS), FakePrices(), capture=lambda: captures.append(1) or "frame",
+    pipeline = RewardPipeline(EntityResolver(ITEMS), FakePrices(), capture=lambda: captures.append(1) or BLANK,
                               read_texts=lambda *a: ["NEKROS PRIME BLUEPRINT"])
     overlay = OverlayWindow(QRect(0, 0, 1920, 1080))
     controller = main_app.Controller(pipeline, overlay, capture_delay_ms=50)
@@ -237,3 +252,54 @@ def test_close_during_capture_delay_cancels_capture(qapp):
         time.sleep(0.01)
     controller.shutdown()
     assert captures == [] and overlay.cards == []
+
+
+# --- live test 4: capture after the fade-in ------------------------------------------------
+
+def _fading_frame(alpha: float, seed: int) -> np.ndarray:
+    """Reward band with names at `alpha` opacity over a background that changes every grab."""
+    from voidtrace.cv_cleaner import reward_band, reward_slots
+
+    rng = np.random.default_rng(seed)
+    frame = rng.integers(20, 90, (1080, 1920), dtype=np.uint8)           # moving background
+    frame = cv2.GaussianBlur(frame, (31, 31), 0)
+    frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+    base = frame.copy()
+    for box, name in zip(reward_slots(1920, 1080, 2), ["FORMA BLUEPRINT", "NEKROS PRIME"]):
+        cv2.putText(frame, name, (box.x + 10, box.y + box.h // 2), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (235, 235, 235), 2)
+    return cv2.addWeighted(frame, alpha, base, 1 - alpha, 0)
+
+
+def test_capture_waits_until_the_name_band_stops_changing():
+    # Names fading in: band brightness rises, then holds.
+    alphas = [0.0, 0.25, 0.5, 0.75, 1.0, 1.0, 1.0, 1.0]
+    frames = [_fading_frame(a, seed) for seed, a in enumerate(alphas)]
+    grabbed = []
+
+    def capture():
+        frame = frames[min(len(grabbed), len(frames) - 1)]
+        grabbed.append(frame)
+        return frame
+
+    pipeline = RewardPipeline(EntityResolver(ITEMS), FakePrices(), capture=capture,
+                              read_texts=lambda frame, *a: ["FORMA BLUEPRINT"])
+    frame = pipeline.capture_settled()
+    assert any(frame is f for f in frames[5:])  # a fully faded-in frame, despite the moving background
+    assert len(grabbed) >= 6
+
+
+def test_second_look_replaces_a_misread_from_the_first_capture():
+    # First capture caught the fade (junk), the second look reads it properly.
+    reads = iter([["FORMA BLUEPRINT", "~~ ."], ["FORMA BLUEPRINT", "NEKROS PRIME BLUEPRINT"]])
+    pipeline = RewardPipeline(EntityResolver(ITEMS), FakePrices(), capture=lambda: BLANK,
+                              read_texts=lambda *a: next(reads))
+    cards = pipeline.read()
+    assert [c.name for c in cards] == ["Forma Blueprint", "Nekros Prime Blueprint"]
+
+
+def test_given_frame_gets_no_second_look():
+    calls = []
+    pipeline = RewardPipeline(EntityResolver(ITEMS), FakePrices(), capture=lambda: calls.append(1) or BLANK,
+                              read_texts=lambda *a: ["FORMA BLUEPRINT", "~~"])
+    pipeline.read(BLANK)
+    assert calls == []
