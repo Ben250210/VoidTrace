@@ -53,13 +53,17 @@ EXPECTED = {
     "akvasto_acri-decitin": ("akvasto", "acri-decitin", 16, 0, 8,
                              [("status_duration", 87.6, True), ("magazine_capacity", 42.4, True),
                               ("critical_damage", 87.5, True)]),
+    # Popup live test (16:07): two-line title and four stats sit higher; 3 rolls ("CYCLE FOR 1,400").
+    "akmagnus_sci-critaata": ("akmagnus", "sci-critaata", 11, 3, 8,
+                              [("base_damage_/_melee_damage", 290.6, True), ("slash_damage", 162.3, True),
+                               ("critical_chance", 200.0, True), ("puncture_damage", -126.0, False)]),
 }
 
 POLARITY = {"sobek_satidra": "madurai", "burston_sati-visicon": "naramon", "hikou_igni-insitron": "vazarin",
             "balla_acriata": "madurai", "dread_manti-vexiata": "madurai", "balla_acrido": "naramon",
             "ceramic_dagger_manti-parades": "madurai", "burston_live": "naramon",
             "efv_8_mars_veximag": "madurai", "euphona_prime_croni-vexitron": "vazarin",
-            "akvasto_acri-decitin": "vazarin"}
+            "akvasto_acri-decitin": "vazarin", "akmagnus_sci-critaata": "madurai"}
 
 
 @pytest.fixture(scope="module")
@@ -110,7 +114,7 @@ def test_stat_line_parsing_survives_ocr_slips():
 @pytest.mark.parametrize("size, allowed_misses", [((1920, 1200), 0), ((1680, 1050), 1)])
 def test_reads_the_same_cards_on_smaller_screens(size, allowed_misses, catalog):
     # Downscaled screenshots are a harsher test than the game rendering natively at that size.
-    # At 1680x1050 the live Burston loses its MR, rolls and a 6 (96.8 -> 90.8): 10 of 11 exact.
+    # At 1680x1050 the live Burston loses its MR, rolls and a 6 (96.8 -> 90.8): 11 of 12 exact.
     misses = []
     for key, (weapon, name, mr, rolls, rank, attrs) in EXPECTED.items():
         d = read_riven(cv2.resize(screen(key), size, interpolation=cv2.INTER_AREA), catalog).draft

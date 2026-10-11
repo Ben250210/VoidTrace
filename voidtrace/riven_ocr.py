@@ -60,8 +60,8 @@ class Layout:
 ITEM_DETAILS = Layout("Item Details", TEXT_BOX, BAR_BOX, DRAIN_BOX, POLARITY_BOX)
 # Inventory > Mods > a riven > Cycle: where most players look at their rivens. The card is about
 # 1.25x bigger and lower, and its bar shows no rolls count; the Kuva price of the next cycle does.
-CYCLE = Layout("Cycle", text=(-140, 136, 280, 148), bar=(-110, 286, 220, 34), drain=(90, -62, 40, 32),
-               polarity=(122, -60, 32, 30), card_scale=1.25, cost=(-100, 406, 200, 32))
+CYCLE = Layout("Cycle", text=(-140, 106, 280, 178), bar=(-110, 286, 220, 34), drain=(90, -62, 40, 32),
+               polarity=(122, -60, 32, 30), card_scale=1.25, cost=(-140, 406, 280, 32))
 LAYOUTS = (ITEM_DETAILS, CYCLE)
 # Kuva for the next cycle, by cycles already done; from the 10th on it stays at 3500.
 CYCLE_COSTS = (900, 1000, 1200, 1400, 1700, 2000, 2350, 2750, 3150, 3500)
@@ -473,8 +473,10 @@ def _read_once(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float, up: fl
         alternates[slug] = [signed(v) for v in others]
 
     mr, rolls = read_bar(binarize(crop(frame, ref_box(frame, layout.bar, ui_scale)), up))
-    if layout.cost is not None:  # the Cycle screen's bar has no rolls count
-        rolls = rolls_from_cost(ocr(binarize(crop(frame, ref_box(frame, layout.cost, ui_scale)), up), psm=7))
+    if layout.cost is not None:
+        # The Cycle screen's bar shows rolls only for rolled rivens; the Kuva price always gives them.
+        from_cost = rolls_from_cost(ocr(binarize(crop(frame, ref_box(frame, layout.cost, ui_scale)), up), psm=7))
+        rolls = from_cost if from_cost is not None else rolls
     drain = read_drain(binarize(crop(frame, ref_box(frame, layout.drain, ui_scale)), up))
     polarity = read_polarity(crop(frame, ref_box(frame, layout.polarity, ui_scale)), up)
     draft = RivenDraft(weapon=weapon.slug if weapon else "", name=name, attrs=tuple(attrs),

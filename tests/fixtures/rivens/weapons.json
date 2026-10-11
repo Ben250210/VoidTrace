@@ -367,6 +367,22 @@
      "thumb": "items/images/en/thumbs/efv_8_mars.7ea6d23799085277f1942e054de9f6fd.128x128.webp"
     }
    }
+  },
+  {
+   "id": "5c5ca81696e8d2003834fdae",
+   "slug": "akmagnus",
+   "gameRef": "/Lotus/Weapons/Tenno/Akimbo/DualMagnus",
+   "group": "secondary",
+   "rivenType": "pistol",
+   "disposition": 1.35,
+   "reqMasteryRank": 12,
+   "i18n": {
+    "en": {
+     "name": "Akmagnus",
+     "icon": "items/images/en/akmagnus.71b5c604b03e3afd601d3d1ec5d116a3.png",
+     "thumb": "items/images/en/thumbs/akmagnus.71b5c604b03e3afd601d3d1ec5d116a3.128x128.png"
+    }
+   }
   }
  ]
 }

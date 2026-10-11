@@ -20,7 +20,8 @@ from voidtrace.riven_watch import RivenScreenWatcher, detect_card
 from voidtrace.rivens import PriceCheck, RivenAttr, RivenDraft
 
 FIXTURES = Path(__file__).parent / "fixtures" / "rivens"
-CYCLE_CARDS = {"efv_8_mars_veximag", "euphona_prime_croni-vexitron", "akvasto_acri-decitin"}
+CYCLE_CARDS = {"efv_8_mars_veximag", "euphona_prime_croni-vexitron", "akvasto_acri-decitin",
+               "akmagnus_sci-critaata"}
 
 
 @pytest.fixture(scope="module")
