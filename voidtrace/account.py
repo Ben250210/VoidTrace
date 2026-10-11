@@ -1,8 +1,11 @@
-"""Your Warframe.Market account: sign in, and create / edit / delete your own buy and sell orders.
+"""Your Warframe.Market account: sign in, and create / edit / delete your own buy and sell orders
+and riven auctions.
 
 How signing in works today: Warframe.Market has no OAuth for outside apps yet ("planned"), so this
 uses the same email + password sign-in the website uses (POST /v1/auth/signin), which returns a
-session token. That token is then sent as `Authorization: Bearer ...` to the v2 order endpoints.
+session token. That token is then sent as `Authorization: Bearer ...` to the v2 order endpoints, and
+as `Authorization: JWT ...` to the v1 auction endpoints (rivens; v2 has none yet). The auction calls
+were checked live on 2026-10-11 with one hidden test auction (created, edited, closed).
 
 What is kept, and where:
   * the password is sent only to api.warframe.market and is never stored
@@ -23,6 +26,7 @@ from typing import Any, Optional
 
 from .items import default_cache_dir
 from .market import API_BASE_V1, MarketClient
+from .rivens import RivenAuction, RivenDraft, parse_auction
 
 log = logging.getLogger(__name__)
 
@@ -86,6 +90,25 @@ def device_id(path: Optional[Path] = None) -> str:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"device_id": value}), encoding="utf-8")
         return value
+
+
+# Plain words for the form errors Warframe.Market sends back on auctions.
+AUCTION_ERRORS = {
+    ("item", "name"): "That riven name does not match its buffs (Warframe.Market checks it).",
+    ("item", "attributes"): "Warframe.Market did not accept those stats for this weapon.",
+}
+
+
+def _auction_error(resp) -> Optional[str]:
+    try:
+        error = resp.json().get("error")
+    except (ValueError, AttributeError):
+        return None
+    if isinstance(error, dict):
+        for (outer, inner), text in AUCTION_ERRORS.items():
+            if isinstance(error.get(outer), dict) and inner in error[outer]:
+                return text
+    return None
 
 
 def _error_message(resp) -> str:
@@ -169,6 +192,49 @@ class Account:
     def delete_order(self, order_id: str) -> None:
         self._call("DELETE", f"/order/{order_id}")
 
+    # --- your riven auctions (v1) -------------------------------------------------------
+
+    def my_auctions(self) -> list[RivenAuction]:
+        """Your open riven auctions, hidden ones included."""
+        payload = self._call_v1("GET", f"/profile/{self.ingame_name}/auctions")
+        return [parse_auction(a, seller=self.ingame_name or "you") for a in payload.get("auctions", ())
+                if not a.get("closed") and (a.get("item") or {}).get("type") == "riven"]
+
+    def create_riven_auction(self, draft: RivenDraft, buyout: int, starting: Optional[int] = None,
+                             minimal_reputation: int = 0, visible: bool = True, note: str = "") -> RivenAuction:
+        if not draft.weapon or not draft.name or not draft.positives:
+            raise ValueError("a riven needs its weapon, name and at least one buff")
+        starting = buyout if starting is None else starting
+        if buyout < 1 or not 1 <= starting <= buyout:
+            raise ValueError("prices must be at least 1, and the starting price at most the buyout")
+        body = {
+            "note": note, "starting_price": int(starting), "buyout_price": int(buyout),
+            "minimal_reputation": int(minimal_reputation), "visible": visible, "private": False,
+            "item": {"type": "riven", "weapon_url_name": draft.weapon, "name": draft.name.lower(),
+                     "mastery_level": int(draft.mr), "re_rolls": int(draft.rolls), "mod_rank": int(draft.rank),
+                     "polarity": draft.polarity,
+                     "attributes": [{"url_name": a.slug, "value": a.value, "positive": a.positive}
+                                    for a in draft.attrs]},
+        }
+        created = parse_auction(self._call_v1("POST", "/auctions/create", body)["auction"], seller=self.ingame_name)
+        if created.visible != visible:  # create does not always honour the flag; an edit does
+            created = self.update_auction(created, visible=visible)
+        return created
+
+    def update_auction(self, auction: RivenAuction, **changes) -> RivenAuction:
+        """Change price, visibility, reputation or note. The rest of the auction is sent unchanged."""
+        body = {"buyout_price": auction.buyout, "starting_price": auction.starting, "visible": auction.visible,
+                "minimal_reputation": auction.minimal_reputation, "note": auction.note}
+        allowed = {"buyout_price", "starting_price", "visible", "minimal_reputation", "note"}
+        body.update({k: v for k, v in changes.items() if k in allowed and v is not None})
+        if body["buyout_price"] is not None and body["starting_price"] > body["buyout_price"]:
+            body["starting_price"] = body["buyout_price"]  # repricing a direct sale moves both
+        payload = self._call_v1("PUT", f"/auctions/entry/{auction.id}", body)
+        return parse_auction(payload["auction"], seller=self.ingame_name)
+
+    def close_auction(self, auction_id: str) -> None:
+        self._call_v1("PUT", f"/auctions/entry/{auction_id}/close")
+
     # --- plumbing ------------------------------------------------------------------------
 
     def _auth(self) -> dict:
@@ -187,6 +253,20 @@ class Account:
         if not resp.content:
             return None
         return resp.json().get("data")
+
+    def _call_v1(self, method: str, path: str, body: Optional[dict] = None) -> Any:
+        """Signed-in v1 call (auctions): JWT auth header, `payload` envelope."""
+        if not self.token:
+            raise NotSignedIn("Sign in to Warframe.Market first.")
+        resp = self.client.request(method, API_BASE_V1 + path, json=body,
+                                   headers={"Authorization": f"JWT {self.token}", "Content-Type": "application/json"})
+        if resp.status_code == 401:
+            self.token = None
+            self.store.clear()
+            raise NotSignedIn("Your Warframe.Market session expired. Sign in again.")
+        if not resp.ok:
+            raise MarketError(_auction_error(resp) or f"Warframe.Market refused that ({_error_message(resp)}).")
+        return (resp.json() or {}).get("payload") or {}
 
 
 def _my_order(o: dict) -> MyOrder:

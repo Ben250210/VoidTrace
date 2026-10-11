@@ -1,8 +1,10 @@
-"""Riven window: find riven auctions for a weapon, and price-check a riven you own.
+"""Riven window: find riven auctions, price-check your riven, and sell it.
 
 A separate window from the market window (rivens are auctions, not orders), with the same look:
   * Find rivens  - auctions for a weapon, filtered by wanted stats and curse; click to copy the whisper
   * Price check  - type in your riven's stats; the estimate comes from comparable listings
+  * Sell         - post it as a Warframe.Market auction (signed in; see riven_trade.py)
+  * My rivens    - your riven auctions: show/hide, match the cheapest, close
 """
 
 from __future__ import annotations
@@ -393,6 +395,8 @@ class RivenWindow(QWidget):
         self._executor = ThreadPoolExecutor(max_workers=2)
 
         self.search = QLineEdit(placeholderText="Search a weapon, e.g. kulstar")
+        self.account_button = QPushButton(objectName="account")
+        self.account_button.clicked.connect(self._account_clicked)
         self.suggestions = QListWidget()
         self.suggestions.setMaximumHeight(180)
         self.suggestions.hide()
@@ -402,19 +406,31 @@ class RivenWindow(QWidget):
         self._toast_timer = QTimer(self, singleShot=True, interval=4000)
         self._toast_timer.timeout.connect(lambda: self.toast.setText(""))
 
+        from .riven_trade import MyRivensPanel, SellPanel  # imported here: it imports this module's types
+
         self.find_panel = FindPanel(self)
         self.price_panel = PricePanel(self)
+        self.sell_panel = SellPanel(self)
+        self.my_rivens = MyRivensPanel(self)
         self.tabs = QTabWidget()
         self.tabs.addTab(self.find_panel, "Find rivens")
         self.tabs.addTab(self.price_panel, "Price check")
+        self.tabs.addTab(self.sell_panel, "Sell")
+        self.tabs.addTab(self.my_rivens, "My rivens")
+        self.tabs.currentChanged.connect(self._tab_changed)
+        self.price_panel.sell_requested.connect(self.open_sell)
 
+        search_row = QHBoxLayout()
+        search_row.addWidget(self.search, 1)
+        search_row.addWidget(self.account_button)
         layout = QVBoxLayout(self)
-        layout.addWidget(self.search)
+        layout.addLayout(search_row)
         layout.addWidget(self.suggestions)
         layout.addWidget(self.title)
         layout.addWidget(self.tabs, 1)
         layout.addWidget(self.toast)
         self._async_done.connect(lambda callback, result: callback(result))
+        self.account_changed()
 
         self.search.textEdited.connect(self._on_search)
         self.search.returnPressed.connect(self._pick_first_suggestion)
@@ -452,6 +468,40 @@ class RivenWindow(QWidget):
         self.price_panel.load_draft(draft)
         self.tabs.setCurrentWidget(self.price_panel)
 
+    def open_sell(self, draft: RivenDraft, check: Optional[PriceCheck]) -> None:
+        self.sell_panel.load(draft, check)
+        self.tabs.setCurrentWidget(self.sell_panel)
+
+    # --- account --------------------------------------------------------------------------
+
+    def account_changed(self) -> None:
+        """Called after signing in or out, here or in the market window (they share one account)."""
+        if self.account.signed_in:
+            self.account_button.setText(f"Signed in as {self.account.ingame_name or 'you'}  \u00b7  Sign out")
+        else:
+            self.account_button.setText("Sign in to Warframe.Market")
+        self.sell_panel.update_state()
+        if self.tabs.currentWidget() is self.my_rivens:
+            self.my_rivens.refresh()
+
+    def show_sign_in(self) -> None:
+        from .trade_panel import SignInDialog
+
+        SignInDialog(self).exec()
+
+    def _account_clicked(self) -> None:
+        if self.account.signed_in:
+            self.account.sign_out()
+            self.account_changed()
+        else:
+            self.show_sign_in()
+
+    def _tab_changed(self, index: int) -> None:
+        if self.tabs.widget(index) is self.my_rivens:
+            self.my_rivens.refresh()
+        elif self.tabs.widget(index) is self.sell_panel:
+            self.sell_panel.update_state()
+
     # --- plumbing ------------------------------------------------------------------------
 
     def show_toast(self, text: str) -> None:
@@ -469,6 +519,10 @@ class RivenWindow(QWidget):
                     self._async_done.emit(on_err, exc)
 
         self._executor.submit(work)
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        self.account_changed()  # you may have signed in or out in the market window meanwhile
 
     def closeEvent(self, event) -> None:  # noqa: N802
         event.ignore()  # closing only hides it; the app keeps running in the tray

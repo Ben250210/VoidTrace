@@ -7,6 +7,7 @@ endpoints: weapons and stats from v2 (/riven/weapons, /riven/attributes), auctio
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 import threading
@@ -50,6 +51,8 @@ class RivenStat:
     positive_only: bool = False
     negative_only: bool = False
     positive_is_negative: bool = False  # e.g. recoil: a minus is the good side
+    prefix: str = ""                    # name parts: "Crita" + "Can" -> "Critacan"
+    suffix: str = ""
 
     def allowed_on(self, weapon: RivenWeapon) -> bool:
         return self.exclusive_to is None or bool({weapon.riven_type, weapon.group} & set(self.exclusive_to))
@@ -80,6 +83,8 @@ class RivenAuction:
     status: str            # ingame / online / offline
     reputation: int
     visible: bool = True
+    minimal_reputation: int = 0
+    note: str = ""
 
     @property
     def positives(self) -> frozenset[str]:
@@ -174,7 +179,8 @@ def parse_stats(data: Sequence[dict]) -> list[RivenStat]:
         (RivenStat(slug=a["slug"], name=a["i18n"]["en"]["name"], unit=a.get("unit"),
                    exclusive_to=tuple(a["exclusiveTo"]) if a.get("exclusiveTo") else None,
                    positive_only=bool(a.get("positiveOnly")), negative_only=bool(a.get("negativeOnly")),
-                   positive_is_negative=bool(a.get("positiveIsNegative")))
+                   positive_is_negative=bool(a.get("positiveIsNegative")),
+                   prefix=a.get("prefix") or "", suffix=a.get("suffix") or "")
          for a in data),
         key=lambda s: s.name,
     )
@@ -220,9 +226,10 @@ def _write_cache(path: Path, raw: dict) -> None:
 
 # --- auctions -------------------------------------------------------------------------------------
 
-def parse_auction(a: dict) -> RivenAuction:
+def parse_auction(a: dict, seller: Optional[str] = None) -> RivenAuction:
+    """One v1 auction. Your own auctions come back with `owner` as a bare user id: pass `seller`."""
     item = a.get("item") or {}
-    owner = a.get("owner") or {}
+    owner = a.get("owner") if isinstance(a.get("owner"), dict) else {}
     return RivenAuction(
         id=a["id"],
         weapon=item.get("weapon_url_name", ""),
@@ -237,11 +244,34 @@ def parse_auction(a: dict) -> RivenAuction:
         starting=int(a.get("starting_price") or 0),
         top_bid=a.get("top_bid"),
         direct=bool(a.get("is_direct_sell")),
-        seller=owner.get("ingame_name", "?"),
+        seller=seller or owner.get("ingame_name", "?"),
         status=owner.get("status", "offline"),
         reputation=int(owner.get("reputation") or 0),
         visible=bool(a.get("visible", True)),
+        minimal_reputation=int(a.get("minimal_reputation") or 0),
+        note=a.get("note_raw") or "",
     )
+
+
+def valid_names(catalog: "RivenCatalog", positives: Sequence[str]) -> set[str]:
+    """Riven names the game can give these buffs (Warframe.Market rejects any other name).
+
+    Each buff has a prefix and a suffix: one buff is prefix+suffix ("critacron"), two are
+    prefix+suffix ("critacan"), three are prefix-prefix+suffix ("sati-critacron"); the order follows
+    the roll sizes, so every order is accepted. Matched 666 of 666 real Kulstar and Rubico listings.
+    """
+    parts = {s.slug: ((s.prefix or "").lower(), (s.suffix or "").lower()) for s in catalog.stats}
+    if not positives or any(p not in parts for p in positives) or len(positives) > 3:
+        return set()
+    names = set()
+    for order in itertools.permutations(positives):
+        if len(order) == 1:
+            names.add(parts[order[0]][0] + parts[order[0]][1])
+        elif len(order) == 2:
+            names.add(parts[order[0]][0] + parts[order[1]][1])
+        else:
+            names.add(f"{parts[order[0]][0]}-{parts[order[1]][0]}{parts[order[2]][1]}")
+    return names
 
 
 def search_path(weapon: str, positives: Sequence[str] = (), negative: Optional[str] = None,
