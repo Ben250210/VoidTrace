@@ -1,4 +1,4 @@
-"""Global hotkey (default Ctrl+Shift+M) to open the market window from inside the game.
+"""Global hotkeys from inside the game: Ctrl+Shift+M opens the market window, Ctrl+Shift+R the rivens.
 
 Uses the standard Win32 RegisterHotKey: Windows tells VoidTrace when the combination is pressed.
 Nothing is sent to or read from Warframe.
@@ -21,6 +21,7 @@ MOD_CONTROL = 0x0002
 MOD_SHIFT = 0x0004
 MOD_NOREPEAT = 0x4000
 HOTKEY_ID = 0x5654  # "VT"
+RIVEN_HOTKEY_ID = 0x5652  # "VR"
 
 
 class HotkeyFilter(QAbstractNativeEventFilter):
@@ -42,20 +43,20 @@ class HotkeyFilter(QAbstractNativeEventFilter):
         return self.handle(msg.message, msg.wParam), 0
 
 
-def register(app, callback: Callable[[], None], key: str = "M") -> HotkeyFilter | None:
+def register(app, callback: Callable[[], None], key: str = "M", hotkey_id: int = HOTKEY_ID) -> HotkeyFilter | None:
     """Register Ctrl+Shift+<key>. Returns the filter (keep a reference) or None if unavailable."""
     if sys.platform != "win32":
         return None
     user32 = ctypes.WinDLL("user32", use_last_error=True)
-    if not user32.RegisterHotKey(None, HOTKEY_ID, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, ord(key.upper())):
+    if not user32.RegisterHotKey(None, hotkey_id, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, ord(key.upper())):
         log.warning("Ctrl+Shift+%s is already taken by another program; use the tray menu instead", key.upper())
         return None
-    hotkey = HotkeyFilter(callback)
+    hotkey = HotkeyFilter(callback, hotkey_id)
     app.installNativeEventFilter(hotkey)
-    log.info("market window hotkey: Ctrl+Shift+%s", key.upper())
+    log.info("hotkey: Ctrl+Shift+%s", key.upper())
     return hotkey
 
 
-def unregister() -> None:
+def unregister(hotkey_id: int = HOTKEY_ID) -> None:
     if sys.platform == "win32":
-        ctypes.WinDLL("user32").UnregisterHotKey(None, HOTKEY_ID)
+        ctypes.WinDLL("user32").UnregisterHotKey(None, hotkey_id)

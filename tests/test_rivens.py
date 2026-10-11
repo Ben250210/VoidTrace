@@ -163,3 +163,11 @@ def test_catalog_uses_stale_cache_when_offline(tmp_path):
             raise ConnectionError("offline")
 
     assert rivens.load_riven_catalog(Offline(), path).weapons
+
+
+def test_price_check_still_lists_the_few_exact_matches():
+    pool = [auction(400, ["critical_chance", "multishot"], "zoom")]
+    pool += [auction(p, ["critical_chance", "status_chance"]) for p in (50, 60, 70, 80)]
+    check = price_check(pool, ["critical_chance", "multishot"], "zoom")
+    assert check.tier == "1 of the same positive stats"
+    assert [a.price for a in check.exact] == [400]

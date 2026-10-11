@@ -97,6 +97,29 @@ class RivenAuction:
         return self.top_bid if self.top_bid is not None else self.starting
 
 
+POLARITIES = ("madurai", "vazarin", "naramon")
+
+
+@dataclass(frozen=True)
+class RivenDraft:
+    """A riven you own, as typed in (or read off the screen): what gets price-checked and sold."""
+    weapon: str = ""
+    name: str = ""
+    attrs: tuple[RivenAttr, ...] = ()
+    mr: int = 8
+    rolls: int = 0
+    rank: int = 0
+    polarity: str = "madurai"
+
+    @property
+    def positives(self) -> list[str]:
+        return [a.slug for a in self.attrs if a.positive]
+
+    @property
+    def negative(self) -> Optional[str]:
+        return next((a.slug for a in self.attrs if not a.positive), None)
+
+
 @dataclass
 class RivenCatalog:
     weapons: list[RivenWeapon]
@@ -282,6 +305,7 @@ class PriceCheck:
     tier: str                      # how alike the comparables are
     comparables: tuple[RivenAuction, ...]
     outliers: tuple[int, ...] = ()
+    exact: tuple[RivenAuction, ...] = ()  # same positive stats, whatever the curse: shown even when too few
 
 
 def comparable_tiers(positives: Sequence[str], negative: Optional[str]) -> list[tuple[str, callable]]:
@@ -319,8 +343,10 @@ def price_check(auctions: Sequence[RivenAuction], positives: Sequence[str], nega
             chosen, tier = hits, label
         if len(hits) >= min_count:
             break
+    pos = frozenset(positives)
+    exact = tuple(sorted((a for a in pool if pos and a.positives == pos), key=lambda a: a.price))
     if not chosen:
-        return PriceCheck(None, None, None, 0, tier, ())
+        return PriceCheck(None, None, None, 0, tier, (), exact=exact)
     kept, outliers = iqr_filter([a.price for a in chosen])
     kept_ids = list(kept)
     comparables = []
@@ -330,4 +356,4 @@ def price_check(auctions: Sequence[RivenAuction], positives: Sequence[str], nega
             comparables.append(a)
     estimate = float(np.median(kept[:CHEAPEST_K])) if kept else None
     return PriceCheck(estimate, int(kept[0]) if kept else None, int(kept[-1]) if kept else None,
-                      len(kept), tier, tuple(comparables), tuple(int(o) for o in outliers))
+                      len(kept), tier, tuple(comparables), tuple(int(o) for o in outliers), exact)

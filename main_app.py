@@ -29,6 +29,7 @@ from voidtrace import app_support, hotkey
 from voidtrace.icons import voidtrace_logo
 from voidtrace.items import load_catalog, load_items
 from voidtrace.market_window import MarketWindow
+from voidtrace.rivens import RivenService, load_riven_catalog
 from voidtrace.sellers import SellerService
 from voidtrace.log_watcher import LogTailer, LogWatcher, RewardScreenEvent, default_log_path
 from voidtrace.overlay import OverlayWindow, cards_summary
@@ -140,11 +141,13 @@ def app_icon() -> QIcon:
     return icon
 
 
-def make_tray(app: QApplication, open_market, game_log_status=lambda: None) -> QSystemTrayIcon:
+def make_tray(app: QApplication, open_market, game_log_status=lambda: None, open_rivens=None) -> QSystemTrayIcon:
     tray = QSystemTrayIcon(app_icon(), app)
     tray.setToolTip("VoidTrace")
     menu = QMenu()
     menu.addAction("Open market (Ctrl+Shift+M)", open_market)
+    if open_rivens is not None:
+        menu.addAction("Rivens (Ctrl+Shift+R)", open_rivens)
     menu.addAction("Run self-test", lambda: show_self_test(game_log_status()))
     menu.addAction("Open log folder", lambda: _open_folder(app_support.log_path().parent))
     menu.addSeparator()
@@ -240,6 +243,25 @@ def main(argv: Optional[list[str]] = None) -> int:
         market.activateWindow()
         market.search.setFocus()
 
+    rivens = None
+
+    def open_rivens() -> None:
+        nonlocal rivens
+        if rivens is None:  # built on first use: its weapon list is one more download
+            from voidtrace.riven_window import RivenWindow
+
+            try:
+                rivens = RivenWindow(load_riven_catalog(market.sellers.client), RivenService(market.sellers.client),
+                                     account=market.account)
+            except Exception as exc:
+                log.warning("could not load riven data: %s", exc)
+                QMessageBox.warning(None, "VoidTrace", f"Could not load riven data from Warframe.Market:\n{exc}")
+                return
+        rivens.show()
+        rivens.raise_()
+        rivens.activateWindow()
+        rivens.search.setFocus()
+
     def open_card(slot: int) -> None:
         item = overlay.cards[slot].resolution.item
         if item is not None and item.slug is not None:
@@ -256,11 +278,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         return ("FAIL: using the slower log file: another program (WFInfo, Overwolf, DebugView) "
                 "was reading the game's log when VoidTrace started")
 
-    tray = make_tray(app, open_market, game_log_status)
+    tray = make_tray(app, open_market, game_log_status, open_rivens)
     tray.showMessage("VoidTrace is running",
                      "Prices appear on relic reward screens (Borderless Fullscreen). Ctrl+Shift+M opens the market.",
                      app_icon(), 7000)
     hotkey_filter = None if args.no_hotkey else hotkey.register(app, open_market)  # noqa: F841
+    riven_hotkey = None if args.no_hotkey else hotkey.register(  # noqa: F841
+        app, open_rivens, key="R", hotkey_id=hotkey.RIVEN_HOTKEY_ID)
 
     if args.demo is not None:
         frame = cv2.imread(str(args.demo))
@@ -283,7 +307,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             watcher.stop()
         controller.shutdown()
         market.shutdown()
+        if rivens is not None:
+            rivens.shutdown()
         hotkey.unregister()
+        hotkey.unregister(hotkey.RIVEN_HOTKEY_ID)
 
 
 if __name__ == "__main__":
