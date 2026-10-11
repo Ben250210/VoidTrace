@@ -5,6 +5,8 @@ A normal clickable window (unlike the overlay), kept on top of Borderless Fullsc
 
 from __future__ import annotations
 
+import html
+
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Sequence
@@ -114,6 +116,14 @@ def _prefix_in_order(q_words: list[str], n_words: list[str]) -> bool:
     return i == len(q_words)
 
 
+def item_title(item: CatalogItem) -> str:
+    """Item name, with its max rank in smaller grey text for ranked items (mods, arcanes)."""
+    name = html.escape(item.name)
+    if item.max_rank is None:
+        return name
+    return f'{name} <span style="color:#9ba0b5; font-size:13px; font-weight:400">max rank {item.max_rank}</span>'
+
+
 class MarketWindow(QWidget):
     _sellers_ready = pyqtSignal(int, list)
     _sellers_failed = pyqtSignal(int, str)
@@ -138,6 +148,10 @@ class MarketWindow(QWidget):
         self.suggestions.hide()
         self.title = QLabel(objectName="title")
         self.rank = QComboBox()
+        # Grow with its labels: they gain seller counts after loading ("Rank 10 (53)"), and a
+        # fixed width cut them to "Ran...(0)".
+        self.rank.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self.rank.view().setTextElideMode(Qt.TextElideMode.ElideNone)
         self.online = QCheckBox("Include online sellers")
         self.online.setChecked(True)
         self.table = QTableWidget(0, len(COLUMNS))
@@ -186,8 +200,7 @@ class MarketWindow(QWidget):
         self.suggestions.clear()
         hits = search_catalog(text, self.catalog)
         for item in hits:
-            label = item.name + (f"  (max rank {item.max_rank})" if item.max_rank else "")
-            self.suggestions.addItem(label)
+            self.suggestions.addItem(item.name)
             self.suggestions.item(self.suggestions.count() - 1).setData(Qt.ItemDataRole.UserRole, item.slug)
         self.suggestions.setVisible(bool(hits))
 
@@ -205,7 +218,7 @@ class MarketWindow(QWidget):
         self.item = item
         self.suggestions.hide()
         self.search.setText(item.name)
-        self.title.setText(item.name)
+        self.title.setText(item_title(item))
         self.rank.blockSignals(True)
         self.rank.clear()
         if item.max_rank is not None:
@@ -286,6 +299,8 @@ class MarketWindow(QWidget):
             r = self.rank.itemData(i)
             self.rank.setItemText(i, f"Rank {r} ({counts.get(r, 0)})")
         self.rank.setItemText(0, f"Any rank ({sum(counts.values())})")
+        view = self.rank.view()
+        view.setMinimumWidth(view.sizeHintForColumn(0) + 24)
         self.rank.blockSignals(False)
 
     # --- clipboard ---------------------------------------------------------------------

@@ -193,6 +193,11 @@ def test_clicking_a_seller_copies_the_whisper(qapp):
     assert window.rank.isVisibleTo(window)
     assert window.rank.itemText(0) == "Any rank (2)"
     assert window.rank.itemText(11) == "Rank 10 (2)"
+    # Labels must fit: the box and its list grow instead of eliding to "Ran...(0)".
+    metrics = window.rank.fontMetrics()
+    assert window.rank.sizeHint().width() > metrics.horizontalAdvance("Any rank (2)")
+    assert window.rank.view().minimumWidth() >= metrics.horizontalAdvance("Rank 10 (2)")
+    assert "max rank 10" in window.title.text()
     window.copy_row(1)
     assert QApplication.clipboard().text() == \
         '/w Ayla_09 Hi! I want to buy: "Primed Continuity (rank 10)" for 48 platinum. (warframe.market)'
@@ -216,6 +221,7 @@ def test_typing_shows_suggestions_and_enter_opens_the_top_one(qapp):
     window.show()
     window._on_search("primed cont")
     assert window.suggestions.count() >= 1
+    assert window.suggestions.item(0).text() == "Primed Continuity"  # no "(max rank 10)" in suggestions
     window._pick_first_suggestion()
     assert window.item.slug == "primed_continuity"
     _wait(qapp, lambda: "Nobody" in window.status.text())
