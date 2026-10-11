@@ -2,8 +2,9 @@
 
 # VoidTrace
 
-Prices for Void relic rewards right on the reward screen, plus a Warframe.Market window to find
-sellers and manage your own orders.
+Prices for Void relic rewards right on the reward screen, a Warframe.Market window to find
+sellers and manage your own orders, and a riven window that reads a riven off the screen, grades
+its rolls and prices it.
 
 ## Download (Windows)
 
@@ -14,7 +15,8 @@ sellers and manage your own orders.
    - If Windows shows "Windows protected your PC", click **More info**, then **Run anyway**.
      The app is not code-signed; the source is all here.
 4. In Warframe, set **Display Mode** to **Borderless Fullscreen**.
-5. Open a relic: prices appear under the reward names. **Ctrl+Shift+M** opens the market.
+5. Open a relic: prices appear under the reward names. **Ctrl+Shift+M** opens the market,
+   **Ctrl+Shift+R** the rivens.
 
 No Python or other installs needed; OCR (Tesseract) is included. If something doesn't work,
 right-click the tray icon, choose **Run self-test**, and send the result (and `voidtrace.log` from
@@ -95,6 +97,27 @@ Warframe.Market has no OAuth for outside apps yet, so sign-in uses the same emai
 as the website (`POST /v1/auth/signin`), and orders go to the v2 order endpoints with the session
 token. The password is sent only to api.warframe.market and never stored; the token is kept in
 Windows Credential Manager (`keyring`) and removed by **Sign out**. Nothing is posted automatically.
+
+## Rivens
+
+**Ctrl+Shift+R** (or tray > Rivens) opens the riven window. With a riven open in the game's
+**Item Details** view, Ctrl+Shift+R reads the card off the screen and prices it.
+
+- **Find rivens**: auctions for a weapon, filtered by wanted stats, curse, buyout only and
+  clean (never rolled) / rolled. Click one to copy a whisper that names the riven:
+  `/w Seller Hi! I'd like to buy your Ocucor Sati-toxitio riven for 1500 platinum. (warframe.market through VoidTrace)`
+- **Price check**: type the riven's name and its buffs fill in (the name spells them: Igni-insitron
+  = Heat + Puncture + Damage to Corpus), or read it off the screen. Each value shows how well it
+  rolled (0-100%), and the estimate comes from listings with the same stats that rolled about as
+  well. Rivens have no trade history, so these are asking prices.
+- **Sell** and **My rivens** (signed in): post a riven auction in one click, show/hide it, match
+  the cheapest comparable listing, close it.
+
+Grades use the game's own base values (Warframe's Public Export, `voidtrace/data/riven_bases.json`,
+refreshed with `python tools/update_riven_bases.py`):
+`value = base x 10 x (rank + 1) x disposition x buff-count multiplier x roll`, roll 0.9-1.1.
+Screen reading is tested on 8 real cards at 2560x1600, 1920x1200 and 1680x1050 (weapon, name,
+stats, MR, rolls, rank, polarity); 16:9 screens and other UI scales are not verified yet.
 
 ## Price cache
 
