@@ -13,6 +13,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Sequence
 from urllib.parse import urlencode
@@ -53,6 +54,7 @@ class RivenStat:
     positive_is_negative: bool = False  # e.g. recoil: a minus is the good side
     prefix: str = ""                    # name parts: "Crita" + "Can" -> "Critacan"
     suffix: str = ""
+    game_ref: str = ""                  # the game's tag, e.g. "WeaponCritChanceMod"
 
     def allowed_on(self, weapon: RivenWeapon) -> bool:
         return self.exclusive_to is None or bool({weapon.riven_type, weapon.group} & set(self.exclusive_to))
@@ -180,7 +182,7 @@ def parse_stats(data: Sequence[dict]) -> list[RivenStat]:
                    exclusive_to=tuple(a["exclusiveTo"]) if a.get("exclusiveTo") else None,
                    positive_only=bool(a.get("positiveOnly")), negative_only=bool(a.get("negativeOnly")),
                    positive_is_negative=bool(a.get("positiveIsNegative")),
-                   prefix=a.get("prefix") or "", suffix=a.get("suffix") or "")
+                   prefix=a.get("prefix") or "", suffix=a.get("suffix") or "", game_ref=a.get("gameRef") or "")
          for a in data),
         key=lambda s: s.name,
     )
@@ -377,6 +379,100 @@ class RivenService:
             with self._lock:
                 self._cache[path] = (time.monotonic(), auctions)
         return sort_auctions([a for a in auctions if a.status in statuses])
+
+
+# --- roll quality ----------------------------------------------------------------------------
+#
+# A riven value is  base x 10 x (rank + 1) x disposition x buff-count multiplier x roll,  where base
+# comes from Warframe's Public Export (voidtrace/data/riven_bases.json, tools/update_riven_bases.py)
+# and roll is random in 0.9-1.1. Checked on the user's 7 rivens: 18 of 20 stats implied a roll of
+# 0.91-1.08 (the other two were melee stats whose game tags differ, now matched by label).
+
+BASES_PATH = Path(__file__).parent / "data" / "riven_bases.json"
+# (buffs, has a curse) -> (buff multiplier, curse multiplier)
+BUFF_MULT = {(2, False): (0.99, 0.0), (2, True): (1.2375, -0.495),
+             (3, False): (0.75, 0.0), (3, True): (0.9375, -0.75)}
+ROLL_MIN, ROLL_MAX = 0.9, 1.1
+# Card labels for stats whose game tag differs on melee (Warframe.Market has one tag per stat).
+BASE_LABELS = {"base_damage_/_melee_damage": ("Damage", "Melee Damage")}
+
+
+@lru_cache(maxsize=1)
+def load_bases() -> dict[str, dict]:
+    try:
+        return json.loads(BASES_PATH.read_text(encoding="utf-8"))["types"]
+    except (OSError, ValueError, KeyError):
+        log.warning("riven base values missing (%s); grades are off", BASES_PATH)
+        return {}
+
+
+def riven_kind(weapon: RivenWeapon) -> str:
+    return "archgun" if weapon.group == "archgun" else weapon.riven_type
+
+
+def stat_base(catalog: RivenCatalog, weapon: RivenWeapon, slug: str) -> Optional[float]:
+    table = load_bases().get(riven_kind(weapon), {})
+    stat = catalog.by_stat.get(slug)
+    if stat is None:
+        return None
+    if stat.game_ref in table:
+        return table[stat.game_ref]["base"]
+    names = {stat.name.lower(), *(n.lower() for n in BASE_LABELS.get(slug, ()))}
+    hits = [e["base"] for e in table.values() if e["label"].lower() in names]
+    return hits[-1] if hits else None  # "Melee Damage" over plain "Damage" on melee
+
+
+def expected_value(catalog: RivenCatalog, weapon: RivenWeapon, slug: str, positive: bool,
+                   n_buffs: int, has_curse: bool, rank: int) -> Optional[float]:
+    """The value at roll 1.0, in the card's units (percent points; a multiplier's excess over 1)."""
+    base = stat_base(catalog, weapon, slug)
+    mult = BUFF_MULT.get((n_buffs, has_curse))
+    if base is None or mult is None:
+        return None
+    value = base * 10 * (rank + 1) * weapon.disposition * (mult[0] if positive else mult[1])
+    unit = catalog.by_stat[slug].unit
+    return value * 100 if unit == "percent" else value
+
+
+def shown_value(catalog: RivenCatalog, slug: str, value: float) -> float:
+    """A card value in the same units as expected_value(): x1.47 -> 0.47."""
+    stat = catalog.by_stat.get(slug)
+    return value - 1 if stat is not None and stat.unit == "multiply" else value
+
+
+def attr_rolls(catalog: RivenCatalog, weapon: RivenWeapon, attrs: Sequence[RivenAttr],
+               rank: int) -> list[Optional[float]]:
+    """Implied roll (about 0.9-1.1) per stat; None where the base value is unknown."""
+    n_buffs = sum(a.positive for a in attrs)
+    has_curse = any(not a.positive for a in attrs)
+    rolls = []
+    for a in attrs:
+        expected = expected_value(catalog, weapon, a.slug, a.positive, n_buffs, has_curse, rank)
+        rolls.append(shown_value(catalog, a.slug, a.value) / expected if expected else None)
+    return rolls
+
+
+def grade(roll: Optional[float]) -> Optional[int]:
+    """0-100: how far up its random range a stat rolled (0.9 -> 0, 1.1 -> 100)."""
+    if roll is None:
+        return None
+    return round(min(1.0, max(0.0, (roll - ROLL_MIN) / (ROLL_MAX - ROLL_MIN))) * 100)
+
+
+def riven_grade(catalog: RivenCatalog, weapon: Optional[RivenWeapon], attrs: Sequence[RivenAttr],
+                rank: int) -> Optional[int]:
+    """Mean grade of the buffs (the curse is left out: a big curse is not a better riven).
+
+    Sellers sometimes list maxed values on a rank-0 riven; when the buffs only make sense at
+    rank 8, they are graded as rank 8.
+    """
+    if weapon is None or not attrs:
+        return None
+    for r in dict.fromkeys((rank, 8)):
+        rolls = [x for a, x in zip(attrs, attr_rolls(catalog, weapon, attrs, r)) if a.positive and x is not None]
+        if rolls and all(0.8 <= x <= 1.25 for x in rolls):
+            return round(sum(grade(x) for x in rolls) / len(rolls))
+    return None
 
 
 # --- price check ------------------------------------------------------------------------------

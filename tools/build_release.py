@@ -94,6 +94,8 @@ def run_pyinstaller(icon: Path) -> None:
         "--icon", str(icon),
         "--distpath", str(DIST), "--workpath", str(BUILD / "pyinstaller"), "--specpath", str(BUILD),
         "--hidden-import", "keyring.backends.Windows",
+        # Riven base values (tools/update_riven_bases.py), read next to voidtrace/rivens.py.
+        "--add-data", f"{ROOT / 'voidtrace' / 'data'}{os.pathsep}voidtrace/data",
     ]
     # Optional extras of our dependencies that VoidTrace never uses (pytesseract's pandas output,
     # keyring's Linux backends, ...). Excluding them cuts the download by about 100 MB.

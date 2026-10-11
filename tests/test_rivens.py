@@ -212,3 +212,34 @@ def test_search_path_rolls_filter():
     rolled = rivens.search_path("kulstar", rolls=rivens.ROLLED)
     assert "re_rolls_min=1" in rolled and "re_rolls_max" not in rolled
     assert "re_rolls" not in rivens.search_path("kulstar")
+
+
+# --- roll quality ---------------------------------------------------------------------------
+
+def test_real_rivens_fit_the_value_formula(catalog):
+    from test_riven_ocr import EXPECTED
+
+    for key, (weapon, _name, _mr, _rolls, rank, attrs) in EXPECTED.items():
+        rolls = rivens.attr_rolls(catalog, catalog.by_weapon[weapon], [RivenAttr(*a) for a in attrs], rank)
+        assert all(r is not None and 0.88 <= r <= 1.17 for r in rolls), (key, rolls)
+
+
+def test_grades(catalog):
+    hikou = catalog.by_weapon["hikou"]
+    attrs = [RivenAttr("puncture_damage", 17.4, True), RivenAttr("heat_damage", 13.2, True),
+             RivenAttr("damage_vs_corpus", 1.07, True), RivenAttr("status_duration", -10.5, False)]
+    assert rivens.riven_grade(catalog, hikou, attrs, 0) == 93
+    assert rivens.grade(0.9) == 0 and rivens.grade(1.1) == 100 and rivens.grade(1.0) == 50
+    assert rivens.grade(None) is None
+
+
+def test_maxed_values_listed_at_rank_0_are_graded_as_rank_8(catalog):
+    hikou = catalog.by_weapon["hikou"]
+    maxed = [RivenAttr("puncture_damage", 156.8, True), RivenAttr("heat_damage", 119.1, True),
+             RivenAttr("damage_vs_corpus", 1.59, True), RivenAttr("status_duration", -94.7, False)]
+    assert rivens.riven_grade(catalog, hikou, maxed, 0) is not None
+
+
+def test_melee_stats_with_their_own_game_tags_have_bases(catalog):
+    balla = catalog.by_weapon["balla"]  # zaw: "Melee Damage" has its own tag in the game data
+    assert rivens.stat_base(catalog, balla, "base_damage_/_melee_damage") is not None

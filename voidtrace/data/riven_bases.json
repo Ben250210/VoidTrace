@@ -1,0 +1,1603 @@
+{
+ "source": "ExportUpgrades_en.json!00_VyAyYCx-vby5YN-tLPimVw",
+ "types": {
+  "archgun": {
+   "WeaponAmmoEfficiency": {
+    "base": -0.0049999999,
+    "label": "Ammo Efficiency",
+    "prefix": "parci",
+    "suffix": "pia"
+   },
+   "WeaponAmmoMaxMod": {
+    "base": 0.0111,
+    "label": "Ammo Maximum",
+    "prefix": "ampi",
+    "suffix": "bin"
+   },
+   "WeaponArmorPiercingDamageMod": {
+    "base": 0.0099999998,
+    "label": "Puncture",
+    "prefix": "insi",
+    "suffix": "cak"
+   },
+   "WeaponBlastDamageMod": {
+    "base": 0.0099999998,
+    "label": "Blast",
+    "prefix": "fraga",
+    "suffix": "tus"
+   },
+   "WeaponClipMaxMod": {
+    "base": 0.0066999998,
+    "label": "Magazine Capacity",
+    "prefix": "arma",
+    "suffix": "tin"
+   },
+   "WeaponCorrosiveDamageMod": {
+    "base": 0.0099999998,
+    "label": "Corrosive",
+    "prefix": "cori",
+    "suffix": "or"
+   },
+   "WeaponCritChanceMod": {
+    "base": 0.0111,
+    "label": "Critical Chance",
+    "prefix": "crita",
+    "suffix": "cron"
+   },
+   "WeaponCritDamageMod": {
+    "base": 0.0088999998,
+    "label": "Critical Damage",
+    "prefix": "acri",
+    "suffix": "tis"
+   },
+   "WeaponDamageAmountMod": {
+    "base": 0.0111,
+    "label": "Damage",
+    "prefix": "visi",
+    "suffix": "ata"
+   },
+   "WeaponElectricityDamageMod": {
+    "base": 0.0133,
+    "label": "Electricity",
+    "prefix": "vexi",
+    "suffix": "tio"
+   },
+   "WeaponFactionDamageCorpus": {
+    "base": 0.0049999999,
+    "label": "Damage to Corpus",
+    "prefix": "manti",
+    "suffix": "tron"
+   },
+   "WeaponFactionDamageGrineer": {
+    "base": 0.0049999999,
+    "label": "Damage to Grineer",
+    "prefix": "argi",
+    "suffix": "con"
+   },
+   "WeaponFactionDamageInfested": {
+    "base": 0.0049999999,
+    "label": "Damage to Infested",
+    "prefix": "pura",
+    "suffix": "ada"
+   },
+   "WeaponFactionDamageOrokin": {
+    "base": 0.0049999999,
+    "label": "Damage to Orokin",
+    "prefix": "effi",
+    "suffix": "tas"
+   },
+   "WeaponFactionDamageScaldra": {
+    "base": 0.0049999999,
+    "label": "Damage to Scaldra",
+    "prefix": "exsi",
+    "suffix": "llo"
+   },
+   "WeaponFactionDamageTechrot": {
+    "base": 0.0049999999,
+    "label": "Damage to Techrot",
+    "prefix": "muti",
+    "suffix": "gia"
+   },
+   "WeaponFireDamageMod": {
+    "base": 0.0133,
+    "label": "Heat",
+    "prefix": "igni",
+    "suffix": "pha"
+   },
+   "WeaponFireIterationsMod": {
+    "base": 0.0066999998,
+    "label": "Multishot",
+    "prefix": "sati",
+    "suffix": "can"
+   },
+   "WeaponFireRateMod": {
+    "base": 0.00667,
+    "label": "Fire Rate (x2 for Bows)",
+    "prefix": "croni",
+    "suffix": "dra"
+   },
+   "WeaponFreezeDamageMod": {
+    "base": 0.0133,
+    "label": "Cold",
+    "prefix": "geli",
+    "suffix": "do"
+   },
+   "WeaponGasDamageMod": {
+    "base": 0.0099999998,
+    "label": "Gas",
+    "prefix": "cali",
+    "suffix": "fel"
+   },
+   "WeaponImpactDamageMod": {
+    "base": 0.0099999998,
+    "label": "Impact",
+    "prefix": "magna",
+    "suffix": "ton"
+   },
+   "WeaponMagneticDamageMod": {
+    "base": 0.0099999998,
+    "label": "Magnetic",
+    "prefix": "magni",
+    "suffix": "bra"
+   },
+   "WeaponProcTimeMod": {
+    "base": 0.01111,
+    "label": "Status Duration",
+    "prefix": "deci",
+    "suffix": "des"
+   },
+   "WeaponPunctureDepthMod": {
+    "base": 0.029999999,
+    "label": "Punch Through",
+    "prefix": "lexi",
+    "suffix": "nok"
+   },
+   "WeaponRadiationDamageMod": {
+    "base": 0.0099999998,
+    "label": "Radiation",
+    "prefix": "radi",
+    "suffix": "lo"
+   },
+   "WeaponRecoilReductionMod": {
+    "base": -0.0099999998,
+    "label": "Weapon Recoil",
+    "prefix": "zeti",
+    "suffix": "mag"
+   },
+   "WeaponReloadSpeedMod": {
+    "base": 0.0111,
+    "label": "Reload Speed",
+    "prefix": "feva",
+    "suffix": "tak"
+   },
+   "WeaponSlashDamageMod": {
+    "base": 0.0099999998,
+    "label": "Slash",
+    "prefix": "sci",
+    "suffix": "sus"
+   },
+   "WeaponStatusDamage": {
+    "base": 0.0099999998,
+    "label": "Status Damage",
+    "prefix": "plaga",
+    "suffix": "mna"
+   },
+   "WeaponStunChanceMod": {
+    "base": 0.0066999998,
+    "label": "Status Chance",
+    "prefix": "hexa",
+    "suffix": "dex"
+   },
+   "WeaponToxinDamageMod": {
+    "base": 0.0133,
+    "label": "Toxin",
+    "prefix": "toxi",
+    "suffix": "tox"
+   },
+   "WeaponViralDamageMod": {
+    "base": 0.0099999998,
+    "label": "Viral",
+    "prefix": "cari",
+    "suffix": "sco"
+   },
+   "WeaponWeakpointCriticalChance": {
+    "base": 0.0275,
+    "label": "Weak Point Critical Chance",
+    "prefix": "exiti",
+    "suffix": "eus"
+   },
+   "WeaponWeakpointDamage": {
+    "base": 0.025,
+    "label": "Weak Point Damage",
+    "prefix": "eni",
+    "suffix": "vo"
+   },
+   "WeaponZoomFovMod": {
+    "base": 0.006666,
+    "label": "Zoom",
+    "prefix": "hera",
+    "suffix": "lis"
+   }
+  },
+  "kitgun": {
+   "WeaponAmmoEfficiency": {
+    "base": -0.0049999999,
+    "label": "Ammo Efficiency",
+    "prefix": "parci",
+    "suffix": "pia"
+   },
+   "WeaponAmmoMaxMod": {
+    "base": 0.0099999998,
+    "label": "Ammo Maximum",
+    "prefix": "ampi",
+    "suffix": "bin"
+   },
+   "WeaponArmorPiercingDamageMod": {
+    "base": 0.01333,
+    "label": "Puncture",
+    "prefix": "insi",
+    "suffix": "cak"
+   },
+   "WeaponBlastDamageMod": {
+    "base": 0.0099999998,
+    "label": "Blast",
+    "prefix": "fraga",
+    "suffix": "tus"
+   },
+   "WeaponClipMaxMod": {
+    "base": 0.0055550002,
+    "label": "Magazine Capacity",
+    "prefix": "arma",
+    "suffix": "tin"
+   },
+   "WeaponCorrosiveDamageMod": {
+    "base": 0.0099999998,
+    "label": "Corrosive",
+    "prefix": "cori",
+    "suffix": "or"
+   },
+   "WeaponCritChanceMod": {
+    "base": 0.016666001,
+    "label": "Critical Chance",
+    "prefix": "crita",
+    "suffix": "cron"
+   },
+   "WeaponCritDamageMod": {
+    "base": 0.0099999998,
+    "label": "Critical Damage",
+    "prefix": "acri",
+    "suffix": "tis"
+   },
+   "WeaponDamageAmountMod": {
+    "base": 0.0244,
+    "label": "Damage",
+    "prefix": "visi",
+    "suffix": "ata"
+   },
+   "WeaponElectricityDamageMod": {
+    "base": 0.0099999998,
+    "label": "Electricity",
+    "prefix": "vexi",
+    "suffix": "tio"
+   },
+   "WeaponFactionDamageCorpus": {
+    "base": 0.0049999999,
+    "label": "Damage to Corpus",
+    "prefix": "manti",
+    "suffix": "tron"
+   },
+   "WeaponFactionDamageGrineer": {
+    "base": 0.0049999999,
+    "label": "Damage to Grineer",
+    "prefix": "argi",
+    "suffix": "con"
+   },
+   "WeaponFactionDamageInfested": {
+    "base": 0.0049999999,
+    "label": "Damage to Infested",
+    "prefix": "pura",
+    "suffix": "ada"
+   },
+   "WeaponFactionDamageOrokin": {
+    "base": 0.0049999999,
+    "label": "Damage to Orokin",
+    "prefix": "effi",
+    "suffix": "tas"
+   },
+   "WeaponFactionDamageScaldra": {
+    "base": 0.0049999999,
+    "label": "Damage to Scaldra",
+    "prefix": "exsi",
+    "suffix": "llo"
+   },
+   "WeaponFactionDamageTechrot": {
+    "base": 0.0049999999,
+    "label": "Damage to Techrot",
+    "prefix": "muti",
+    "suffix": "gia"
+   },
+   "WeaponFireDamageMod": {
+    "base": 0.0099999998,
+    "label": "Heat",
+    "prefix": "igni",
+    "suffix": "pha"
+   },
+   "WeaponFireIterationsMod": {
+    "base": 0.0133,
+    "label": "Multishot",
+    "prefix": "sati",
+    "suffix": "can"
+   },
+   "WeaponFireRateMod": {
+    "base": 0.0082999999,
+    "label": "Fire Rate",
+    "prefix": "croni",
+    "suffix": "dra"
+   },
+   "WeaponFreezeDamageMod": {
+    "base": 0.0099999998,
+    "label": "Cold",
+    "prefix": "geli",
+    "suffix": "do"
+   },
+   "WeaponGasDamageMod": {
+    "base": 0.0099999998,
+    "label": "Gas",
+    "prefix": "cali",
+    "suffix": "fel"
+   },
+   "WeaponImpactDamageMod": {
+    "base": 0.013333,
+    "label": "Impact",
+    "prefix": "magna",
+    "suffix": "ton"
+   },
+   "WeaponMagazineReloadHolstered": {
+    "base": 0.0099999998,
+    "label": "Magazine Reloaded/s when Holstered",
+    "prefix": "parci",
+    "suffix": "pia"
+   },
+   "WeaponMagneticDamageMod": {
+    "base": 0.0099999998,
+    "label": "Magnetic",
+    "prefix": "magni",
+    "suffix": "bra"
+   },
+   "WeaponProcTimeMod": {
+    "base": 0.01111,
+    "label": "Status Duration",
+    "prefix": "deci",
+    "suffix": "des"
+   },
+   "WeaponProjectileSpeedMod": {
+    "base": 0.0099999998,
+    "label": "Projectile Speed",
+    "prefix": "conci",
+    "suffix": "nak"
+   },
+   "WeaponPunctureDepthMod": {
+    "base": 0.029999999,
+    "label": "Punch Through",
+    "prefix": "lexi",
+    "suffix": "nok"
+   },
+   "WeaponRadiationDamageMod": {
+    "base": 0.0099999998,
+    "label": "Radiation",
+    "prefix": "radi",
+    "suffix": "lo"
+   },
+   "WeaponRecoilReductionMod": {
+    "base": -0.0099999998,
+    "label": "Weapon Recoil",
+    "prefix": "zeti",
+    "suffix": "mag"
+   },
+   "WeaponReloadSpeedMod": {
+    "base": 0.0055550002,
+    "label": "Reload Speed",
+    "prefix": "feva",
+    "suffix": "tak"
+   },
+   "WeaponSlashDamageMod": {
+    "base": 0.013333,
+    "label": "Slash",
+    "prefix": "sci",
+    "suffix": "sus"
+   },
+   "WeaponStatusDamage": {
+    "base": 0.0099999998,
+    "label": "Status Damage",
+    "prefix": "plaga",
+    "suffix": "mna"
+   },
+   "WeaponStunChanceMod": {
+    "base": 0.0099999998,
+    "label": "Status Chance",
+    "prefix": "hexa",
+    "suffix": "dex"
+   },
+   "WeaponToxinDamageMod": {
+    "base": 0.0099999998,
+    "label": "Toxin",
+    "prefix": "toxi",
+    "suffix": "tox"
+   },
+   "WeaponViralDamageMod": {
+    "base": 0.0099999998,
+    "label": "Viral",
+    "prefix": "cari",
+    "suffix": "sco"
+   },
+   "WeaponWeakpointCriticalChance": {
+    "base": 0.0275,
+    "label": "Weak Point Critical Chance",
+    "prefix": "exiti",
+    "suffix": "eus"
+   },
+   "WeaponWeakpointDamage": {
+    "base": 0.025,
+    "label": "Weak Point Damage",
+    "prefix": "eni",
+    "suffix": "vo"
+   },
+   "WeaponZoomFovMod": {
+    "base": 0.0088999998,
+    "label": "Zoom",
+    "prefix": "hera",
+    "suffix": "lis"
+   }
+  },
+  "melee": {
+   "ComboDurationMod": {
+    "base": 0.090000004,
+    "label": "s Combo Duration",
+    "prefix": "tempi",
+    "suffix": "nem"
+   },
+   "SlideAttackCritChanceMod": {
+    "base": 0.013334,
+    "label": "|STAT1|% Critical Chance for Slide Attack",
+    "prefix": "pleci",
+    "suffix": "nent"
+   },
+   "WeaponArmorPiercingDamageMod": {
+    "base": 0.0133,
+    "label": "Puncture",
+    "prefix": "insi",
+    "suffix": "cak"
+   },
+   "WeaponBlastDamageMod": {
+    "base": 0.0099999998,
+    "label": "Blast",
+    "prefix": "fraga",
+    "suffix": "tus"
+   },
+   "WeaponCorrosiveDamageMod": {
+    "base": 0.0099999998,
+    "label": "Corrosive",
+    "prefix": "cori",
+    "suffix": "or"
+   },
+   "WeaponCritChanceMod": {
+    "base": 0.02,
+    "label": "Critical Chance (x2 for Heavy Attacks)",
+    "prefix": "crita",
+    "suffix": "cron"
+   },
+   "WeaponCritDamageMod": {
+    "base": 0.0099999998,
+    "label": "Critical Damage",
+    "prefix": "acri",
+    "suffix": "tis"
+   },
+   "WeaponElectricityDamageMod": {
+    "base": 0.0099999998,
+    "label": "Electricity",
+    "prefix": "vexi",
+    "suffix": "tio"
+   },
+   "WeaponFactionDamageOrokin": {
+    "base": 0.0049999999,
+    "label": "Damage to Orokin",
+    "prefix": "effi",
+    "suffix": "tas"
+   },
+   "WeaponFactionDamageScaldra": {
+    "base": 0.0049999999,
+    "label": "Damage to Scaldra",
+    "prefix": "exsi",
+    "suffix": "llo"
+   },
+   "WeaponFactionDamageTechrot": {
+    "base": 0.0049999999,
+    "label": "Damage to Techrot",
+    "prefix": "muti",
+    "suffix": "gia"
+   },
+   "WeaponFireDamageMod": {
+    "base": 0.0099999998,
+    "label": "Heat",
+    "prefix": "igni",
+    "suffix": "pha"
+   },
+   "WeaponFireRateMod": {
+    "base": 0.0060999999,
+    "label": "Attack Speed",
+    "prefix": "croni",
+    "suffix": "dra"
+   },
+   "WeaponFreezeDamageMod": {
+    "base": 0.0099999998,
+    "label": "Cold",
+    "prefix": "geli",
+    "suffix": "do"
+   },
+   "WeaponGasDamageMod": {
+    "base": 0.0099999998,
+    "label": "Gas",
+    "prefix": "cali",
+    "suffix": "fel"
+   },
+   "WeaponImpactDamageMod": {
+    "base": 0.0133,
+    "label": "Impact",
+    "prefix": "magna",
+    "suffix": "ton"
+   },
+   "WeaponMagneticDamageMod": {
+    "base": 0.0099999998,
+    "label": "Magnetic",
+    "prefix": "magni",
+    "suffix": "bra"
+   },
+   "WeaponMeleeComboBonusOnHitMod": {
+    "base": 0.0065299999,
+    "label": "Additional Combo Count Chance",
+    "prefix": "laci",
+    "suffix": "nus"
+   },
+   "WeaponMeleeComboEfficiencyMod": {
+    "base": 0.0081599997,
+    "label": "Heavy Attack Efficiency",
+    "prefix": "forti",
+    "suffix": "us"
+   },
+   "WeaponMeleeComboInitialBonusMod": {
+    "base": 0.27224001,
+    "label": "Initial Combo",
+    "prefix": "para",
+    "suffix": "um"
+   },
+   "WeaponMeleeComboPointsOnHitMod": {
+    "base": -0.01165,
+    "label": "Chance to Gain Combo Count",
+    "prefix": "",
+    "suffix": ""
+   },
+   "WeaponMeleeDamageMod": {
+    "base": 0.018300001,
+    "label": "Melee Damage",
+    "prefix": "visi",
+    "suffix": "ata"
+   },
+   "WeaponMeleeFactionDamageCorpus": {
+    "base": 0.0049999999,
+    "label": "Damage to Corpus",
+    "prefix": "manti",
+    "suffix": "tron"
+   },
+   "WeaponMeleeFactionDamageGrineer": {
+    "base": 0.0049999999,
+    "label": "Damage to Grineer",
+    "prefix": "argi",
+    "suffix": "con"
+   },
+   "WeaponMeleeFactionDamageInfested": {
+    "base": 0.0049999999,
+    "label": "Damage to Infested",
+    "prefix": "pura",
+    "suffix": "ada"
+   },
+   "WeaponMeleeFinisherDamageMod": {
+    "base": 0.0133,
+    "label": "Finisher Damage",
+    "prefix": "exi",
+    "suffix": "cta"
+   },
+   "WeaponMeleeHeavyAttackChargeMod": {
+    "base": 0.0133,
+    "label": "Heavy Attack Wind Up Speed",
+    "prefix": "laci",
+    "suffix": "nus"
+   },
+   "WeaponMeleeHeavyAttackDamageMod": {
+    "base": 0.0133,
+    "label": "Melee Damage on Heavy Attack",
+    "prefix": "laci",
+    "suffix": "nus"
+   },
+   "WeaponMeleeParryAngleMod": {
+    "base": 0.0089999996,
+    "label": "Parry Angle",
+    "prefix": "laci",
+    "suffix": "nus"
+   },
+   "WeaponMeleeRangeIncMod": {
+    "base": 0.021579999,
+    "label": "Range",
+    "prefix": "locti",
+    "suffix": "tor"
+   },
+   "WeaponMeleeSlamDamageMod": {
+    "base": 0.0133,
+    "label": "Slam Attack Damage",
+    "prefix": "laci",
+    "suffix": "nus"
+   },
+   "WeaponProcTimeMod": {
+    "base": 0.01111,
+    "label": "Status Duration",
+    "prefix": "deci",
+    "suffix": "des"
+   },
+   "WeaponRadiationDamageMod": {
+    "base": 0.0099999998,
+    "label": "Radiation",
+    "prefix": "radi",
+    "suffix": "lo"
+   },
+   "WeaponSlashDamageMod": {
+    "base": 0.0133,
+    "label": "Slash",
+    "prefix": "sci",
+    "suffix": "sus"
+   },
+   "WeaponStatusDamage": {
+    "base": 0.0099999998,
+    "label": "Status Damage",
+    "prefix": "plaga",
+    "suffix": "mna"
+   },
+   "WeaponStunChanceMod": {
+    "base": 0.0099999998,
+    "label": "Status Chance",
+    "prefix": "hexa",
+    "suffix": "dex"
+   },
+   "WeaponToxinDamageMod": {
+    "base": 0.0099999998,
+    "label": "Toxin",
+    "prefix": "toxi",
+    "suffix": "tox"
+   },
+   "WeaponViralDamageMod": {
+    "base": 0.0099999998,
+    "label": "Viral",
+    "prefix": "cari",
+    "suffix": "sco"
+   }
+  },
+  "pistol": {
+   "WeaponAmmoEfficiency": {
+    "base": -0.0049999999,
+    "label": "Ammo Efficiency",
+    "prefix": "parci",
+    "suffix": "pia"
+   },
+   "WeaponAmmoMaxMod": {
+    "base": 0.0099999998,
+    "label": "Ammo Maximum",
+    "prefix": "ampi",
+    "suffix": "bin"
+   },
+   "WeaponArmorPiercingDamageMod": {
+    "base": 0.01333,
+    "label": "Puncture",
+    "prefix": "insi",
+    "suffix": "cak"
+   },
+   "WeaponBlastDamageMod": {
+    "base": 0.0099999998,
+    "label": "Blast",
+    "prefix": "fraga",
+    "suffix": "tus"
+   },
+   "WeaponClipMaxMod": {
+    "base": 0.0055550002,
+    "label": "Magazine Capacity",
+    "prefix": "arma",
+    "suffix": "tin"
+   },
+   "WeaponCorrosiveDamageMod": {
+    "base": 0.0099999998,
+    "label": "Corrosive",
+    "prefix": "cori",
+    "suffix": "or"
+   },
+   "WeaponCritChanceMod": {
+    "base": 0.016666001,
+    "label": "Critical Chance",
+    "prefix": "crita",
+    "suffix": "cron"
+   },
+   "WeaponCritDamageMod": {
+    "base": 0.0099999998,
+    "label": "Critical Damage",
+    "prefix": "acri",
+    "suffix": "tis"
+   },
+   "WeaponDamageAmountMod": {
+    "base": 0.0244,
+    "label": "Damage",
+    "prefix": "visi",
+    "suffix": "ata"
+   },
+   "WeaponElectricityDamageMod": {
+    "base": 0.0099999998,
+    "label": "Electricity",
+    "prefix": "vexi",
+    "suffix": "tio"
+   },
+   "WeaponFactionDamageCorpus": {
+    "base": 0.0049999999,
+    "label": "Damage to Corpus",
+    "prefix": "manti",
+    "suffix": "tron"
+   },
+   "WeaponFactionDamageGrineer": {
+    "base": 0.0049999999,
+    "label": "Damage to Grineer",
+    "prefix": "argi",
+    "suffix": "con"
+   },
+   "WeaponFactionDamageInfested": {
+    "base": 0.0049999999,
+    "label": "Damage to Infested",
+    "prefix": "pura",
+    "suffix": "ada"
+   },
+   "WeaponFactionDamageOrokin": {
+    "base": 0.0049999999,
+    "label": "Damage to Orokin",
+    "prefix": "effi",
+    "suffix": "tas"
+   },
+   "WeaponFactionDamageScaldra": {
+    "base": 0.0049999999,
+    "label": "Damage to Scaldra",
+    "prefix": "exsi",
+    "suffix": "llo"
+   },
+   "WeaponFactionDamageTechrot": {
+    "base": 0.0049999999,
+    "label": "Damage to Techrot",
+    "prefix": "muti",
+    "suffix": "gia"
+   },
+   "WeaponFireDamageMod": {
+    "base": 0.0099999998,
+    "label": "Heat",
+    "prefix": "igni",
+    "suffix": "pha"
+   },
+   "WeaponFireIterationsMod": {
+    "base": 0.0133,
+    "label": "Multishot",
+    "prefix": "sati",
+    "suffix": "can"
+   },
+   "WeaponFireRateMod": {
+    "base": 0.0082999999,
+    "label": "Fire Rate",
+    "prefix": "croni",
+    "suffix": "dra"
+   },
+   "WeaponFreezeDamageMod": {
+    "base": 0.0099999998,
+    "label": "Cold",
+    "prefix": "geli",
+    "suffix": "do"
+   },
+   "WeaponGasDamageMod": {
+    "base": 0.0099999998,
+    "label": "Gas",
+    "prefix": "cali",
+    "suffix": "fel"
+   },
+   "WeaponImpactDamageMod": {
+    "base": 0.013333,
+    "label": "Impact",
+    "prefix": "magna",
+    "suffix": "ton"
+   },
+   "WeaponMagazineReloadHolstered": {
+    "base": 0.0099999998,
+    "label": "Magazine Reloaded/s when Holstered",
+    "prefix": "parci",
+    "suffix": "pia"
+   },
+   "WeaponMagneticDamageMod": {
+    "base": 0.0099999998,
+    "label": "Magnetic",
+    "prefix": "magni",
+    "suffix": "bra"
+   },
+   "WeaponProcTimeMod": {
+    "base": 0.01111,
+    "label": "Status Duration",
+    "prefix": "deci",
+    "suffix": "des"
+   },
+   "WeaponProjectileSpeedMod": {
+    "base": 0.0099999998,
+    "label": "Projectile Speed",
+    "prefix": "conci",
+    "suffix": "nak"
+   },
+   "WeaponPunctureDepthMod": {
+    "base": 0.029999999,
+    "label": "Punch Through",
+    "prefix": "lexi",
+    "suffix": "nok"
+   },
+   "WeaponRadiationDamageMod": {
+    "base": 0.0099999998,
+    "label": "Radiation",
+    "prefix": "radi",
+    "suffix": "lo"
+   },
+   "WeaponRecoilReductionMod": {
+    "base": -0.0099999998,
+    "label": "Weapon Recoil",
+    "prefix": "zeti",
+    "suffix": "mag"
+   },
+   "WeaponReloadSpeedMod": {
+    "base": 0.0055550002,
+    "label": "Reload Speed",
+    "prefix": "feva",
+    "suffix": "tak"
+   },
+   "WeaponSlashDamageMod": {
+    "base": 0.013333,
+    "label": "Slash",
+    "prefix": "sci",
+    "suffix": "sus"
+   },
+   "WeaponStatusDamage": {
+    "base": 0.0099999998,
+    "label": "Status Damage",
+    "prefix": "plaga",
+    "suffix": "mna"
+   },
+   "WeaponStunChanceMod": {
+    "base": 0.0099999998,
+    "label": "Status Chance",
+    "prefix": "hexa",
+    "suffix": "dex"
+   },
+   "WeaponToxinDamageMod": {
+    "base": 0.0099999998,
+    "label": "Toxin",
+    "prefix": "toxi",
+    "suffix": "tox"
+   },
+   "WeaponViralDamageMod": {
+    "base": 0.0099999998,
+    "label": "Viral",
+    "prefix": "cari",
+    "suffix": "sco"
+   },
+   "WeaponWeakpointCriticalChance": {
+    "base": 0.0275,
+    "label": "Weak Point Critical Chance",
+    "prefix": "exiti",
+    "suffix": "eus"
+   },
+   "WeaponWeakpointDamage": {
+    "base": 0.025,
+    "label": "Weak Point Damage",
+    "prefix": "eni",
+    "suffix": "vo"
+   },
+   "WeaponZoomFovMod": {
+    "base": 0.0088999998,
+    "label": "Zoom",
+    "prefix": "hera",
+    "suffix": "lis"
+   }
+  },
+  "rifle": {
+   "WeaponAmmoEfficiency": {
+    "base": -0.0049999999,
+    "label": "Ammo Efficiency",
+    "prefix": "parci",
+    "suffix": "pia"
+   },
+   "WeaponAmmoMaxMod": {
+    "base": 0.0055499999,
+    "label": "Ammo Maximum",
+    "prefix": "ampi",
+    "suffix": "bin"
+   },
+   "WeaponArmorPiercingDamageMod": {
+    "base": 0.01333,
+    "label": "Puncture",
+    "prefix": "insi",
+    "suffix": "cak"
+   },
+   "WeaponBlastDamageMod": {
+    "base": 0.0099999998,
+    "label": "Blast",
+    "prefix": "fraga",
+    "suffix": "tus"
+   },
+   "WeaponClipMaxMod": {
+    "base": 0.0055550002,
+    "label": "Magazine Capacity",
+    "prefix": "arma",
+    "suffix": "tin"
+   },
+   "WeaponCorrosiveDamageMod": {
+    "base": 0.0099999998,
+    "label": "Corrosive",
+    "prefix": "cori",
+    "suffix": "or"
+   },
+   "WeaponCritChanceMod": {
+    "base": 0.016666001,
+    "label": "Critical Chance",
+    "prefix": "crita",
+    "suffix": "cron"
+   },
+   "WeaponCritDamageMod": {
+    "base": 0.013333,
+    "label": "Critical Damage",
+    "prefix": "acri",
+    "suffix": "tis"
+   },
+   "WeaponDamageAmountMod": {
+    "base": 0.018333299,
+    "label": "Damage",
+    "prefix": "visi",
+    "suffix": "ata"
+   },
+   "WeaponElectricityDamageMod": {
+    "base": 0.0099999998,
+    "label": "Electricity",
+    "prefix": "vexi",
+    "suffix": "tio"
+   },
+   "WeaponFactionDamageCorpus": {
+    "base": 0.0049999999,
+    "label": "Damage to Corpus",
+    "prefix": "manti",
+    "suffix": "tron"
+   },
+   "WeaponFactionDamageGrineer": {
+    "base": 0.0049999999,
+    "label": "Damage to Grineer",
+    "prefix": "argi",
+    "suffix": "con"
+   },
+   "WeaponFactionDamageInfested": {
+    "base": 0.0049999999,
+    "label": "Damage to Infested",
+    "prefix": "pura",
+    "suffix": "ada"
+   },
+   "WeaponFactionDamageOrokin": {
+    "base": 0.0049999999,
+    "label": "Damage to Orokin",
+    "prefix": "effi",
+    "suffix": "tas"
+   },
+   "WeaponFactionDamageScaldra": {
+    "base": 0.0049999999,
+    "label": "Damage to Scaldra",
+    "prefix": "exsi",
+    "suffix": "llo"
+   },
+   "WeaponFactionDamageTechrot": {
+    "base": 0.0049999999,
+    "label": "Damage to Techrot",
+    "prefix": "muti",
+    "suffix": "gia"
+   },
+   "WeaponFireDamageMod": {
+    "base": 0.0099999998,
+    "label": "Heat",
+    "prefix": "igni",
+    "suffix": "pha"
+   },
+   "WeaponFireIterationsMod": {
+    "base": 0.0099999998,
+    "label": "Multishot",
+    "prefix": "sati",
+    "suffix": "can"
+   },
+   "WeaponFireRateMod": {
+    "base": 0.00667,
+    "label": "Fire Rate (x2 for Bows)",
+    "prefix": "croni",
+    "suffix": "dra"
+   },
+   "WeaponFreezeDamageMod": {
+    "base": 0.0099999998,
+    "label": "Cold",
+    "prefix": "geli",
+    "suffix": "do"
+   },
+   "WeaponGasDamageMod": {
+    "base": 0.0099999998,
+    "label": "Gas",
+    "prefix": "cali",
+    "suffix": "fel"
+   },
+   "WeaponImpactDamageMod": {
+    "base": 0.013333,
+    "label": "Impact",
+    "prefix": "magna",
+    "suffix": "ton"
+   },
+   "WeaponMagazineReloadHolstered": {
+    "base": 0.0099999998,
+    "label": "Magazine Reloaded/s when Holstered",
+    "prefix": "parci",
+    "suffix": "pia"
+   },
+   "WeaponMagneticDamageMod": {
+    "base": 0.0099999998,
+    "label": "Magnetic",
+    "prefix": "magni",
+    "suffix": "bra"
+   },
+   "WeaponProcTimeMod": {
+    "base": 0.01111,
+    "label": "Status Duration",
+    "prefix": "deci",
+    "suffix": "des"
+   },
+   "WeaponProjectileSpeedMod": {
+    "base": 0.0099999998,
+    "label": "Projectile Speed",
+    "prefix": "conci",
+    "suffix": "nak"
+   },
+   "WeaponPunctureDepthMod": {
+    "base": 0.029999999,
+    "label": "Punch Through",
+    "prefix": "lexi",
+    "suffix": "nok"
+   },
+   "WeaponRadiationDamageMod": {
+    "base": 0.0099999998,
+    "label": "Radiation",
+    "prefix": "radi",
+    "suffix": "lo"
+   },
+   "WeaponRecoilReductionMod": {
+    "base": -0.0099999998,
+    "label": "Weapon Recoil",
+    "prefix": "zeti",
+    "suffix": "mag"
+   },
+   "WeaponReloadSpeedMod": {
+    "base": 0.0055550002,
+    "label": "Reload Speed",
+    "prefix": "feva",
+    "suffix": "tak"
+   },
+   "WeaponSlashDamageMod": {
+    "base": 0.013333,
+    "label": "Slash",
+    "prefix": "sci",
+    "suffix": "sus"
+   },
+   "WeaponStatusDamage": {
+    "base": 0.0099999998,
+    "label": "Status Damage",
+    "prefix": "plaga",
+    "suffix": "mna"
+   },
+   "WeaponStunChanceMod": {
+    "base": 0.0099999998,
+    "label": "Status Chance",
+    "prefix": "hexa",
+    "suffix": "dex"
+   },
+   "WeaponToxinDamageMod": {
+    "base": 0.0099999998,
+    "label": "Toxin",
+    "prefix": "toxi",
+    "suffix": "tox"
+   },
+   "WeaponViralDamageMod": {
+    "base": 0.0099999998,
+    "label": "Viral",
+    "prefix": "cari",
+    "suffix": "sco"
+   },
+   "WeaponWeakpointCriticalChance": {
+    "base": 0.0275,
+    "label": "Weak Point Critical Chance",
+    "prefix": "exiti",
+    "suffix": "eus"
+   },
+   "WeaponWeakpointDamage": {
+    "base": 0.025,
+    "label": "Weak Point Damage",
+    "prefix": "eni",
+    "suffix": "vo"
+   },
+   "WeaponZoomFovMod": {
+    "base": 0.006666,
+    "label": "Zoom",
+    "prefix": "hera",
+    "suffix": "lis"
+   }
+  },
+  "shotgun": {
+   "WeaponAmmoEfficiency": {
+    "base": -0.0049999999,
+    "label": "Ammo Efficiency",
+    "prefix": "parci",
+    "suffix": "pia"
+   },
+   "WeaponAmmoMaxMod": {
+    "base": 0.0099999998,
+    "label": "Ammo Maximum",
+    "prefix": "ampi",
+    "suffix": "bin"
+   },
+   "WeaponArmorPiercingDamageMod": {
+    "base": 0.01333,
+    "label": "Puncture",
+    "prefix": "insi",
+    "suffix": "cak"
+   },
+   "WeaponBlastDamageMod": {
+    "base": 0.0099999998,
+    "label": "Blast",
+    "prefix": "fraga",
+    "suffix": "tus"
+   },
+   "WeaponClipMaxMod": {
+    "base": 0.0055550002,
+    "label": "Magazine Capacity",
+    "prefix": "arma",
+    "suffix": "tin"
+   },
+   "WeaponCorrosiveDamageMod": {
+    "base": 0.0099999998,
+    "label": "Corrosive",
+    "prefix": "cori",
+    "suffix": "or"
+   },
+   "WeaponCritChanceMod": {
+    "base": 0.0099999998,
+    "label": "Critical Chance",
+    "prefix": "crita",
+    "suffix": "cron"
+   },
+   "WeaponCritDamageMod": {
+    "base": 0.0099999998,
+    "label": "Critical Damage",
+    "prefix": "acri",
+    "suffix": "tis"
+   },
+   "WeaponDamageAmountMod": {
+    "base": 0.018300001,
+    "label": "Damage",
+    "prefix": "visi",
+    "suffix": "ata"
+   },
+   "WeaponElectricityDamageMod": {
+    "base": 0.0099999998,
+    "label": "Electricity",
+    "prefix": "vexi",
+    "suffix": "tio"
+   },
+   "WeaponFactionDamageCorpus": {
+    "base": 0.0049999999,
+    "label": "Damage to Corpus",
+    "prefix": "manti",
+    "suffix": "tron"
+   },
+   "WeaponFactionDamageGrineer": {
+    "base": 0.0049999999,
+    "label": "Damage to Grineer",
+    "prefix": "argi",
+    "suffix": "con"
+   },
+   "WeaponFactionDamageInfested": {
+    "base": 0.0049999999,
+    "label": "Damage to Infested",
+    "prefix": "pura",
+    "suffix": "ada"
+   },
+   "WeaponFactionDamageOrokin": {
+    "base": 0.0049999999,
+    "label": "Damage to Orokin",
+    "prefix": "effi",
+    "suffix": "tas"
+   },
+   "WeaponFactionDamageScaldra": {
+    "base": 0.0049999999,
+    "label": "Damage to Scaldra",
+    "prefix": "exsi",
+    "suffix": "llo"
+   },
+   "WeaponFactionDamageTechrot": {
+    "base": 0.0049999999,
+    "label": "Damage to Techrot",
+    "prefix": "muti",
+    "suffix": "gia"
+   },
+   "WeaponFireDamageMod": {
+    "base": 0.0099999998,
+    "label": "Heat",
+    "prefix": "igni",
+    "suffix": "pha"
+   },
+   "WeaponFireIterationsMod": {
+    "base": 0.0133,
+    "label": "Multishot",
+    "prefix": "sati",
+    "suffix": "can"
+   },
+   "WeaponFireRateMod": {
+    "base": 0.0099999998,
+    "label": "Fire Rate (x2 for Bows)",
+    "prefix": "croni",
+    "suffix": "dra"
+   },
+   "WeaponFreezeDamageMod": {
+    "base": 0.0099999998,
+    "label": "Cold",
+    "prefix": "geli",
+    "suffix": "do"
+   },
+   "WeaponGasDamageMod": {
+    "base": 0.0099999998,
+    "label": "Gas",
+    "prefix": "cali",
+    "suffix": "fel"
+   },
+   "WeaponImpactDamageMod": {
+    "base": 0.013333,
+    "label": "Impact",
+    "prefix": "magna",
+    "suffix": "ton"
+   },
+   "WeaponMagazineReloadHolstered": {
+    "base": 0.0099999998,
+    "label": "Magazine Reloaded/s when Holstered",
+    "prefix": "parci",
+    "suffix": "pia"
+   },
+   "WeaponMagneticDamageMod": {
+    "base": 0.0099999998,
+    "label": "Magnetic",
+    "prefix": "magni",
+    "suffix": "bra"
+   },
+   "WeaponProcTimeMod": {
+    "base": 0.01111,
+    "label": "Status Duration",
+    "prefix": "deci",
+    "suffix": "des"
+   },
+   "WeaponProjectileSpeedMod": {
+    "base": 0.0099999998,
+    "label": "Projectile Speed",
+    "prefix": "conci",
+    "suffix": "nak"
+   },
+   "WeaponPunctureDepthMod": {
+    "base": 0.029999999,
+    "label": "Punch Through",
+    "prefix": "lexi",
+    "suffix": "nok"
+   },
+   "WeaponRadiationDamageMod": {
+    "base": 0.0099999998,
+    "label": "Radiation",
+    "prefix": "radi",
+    "suffix": "lo"
+   },
+   "WeaponRecoilReductionMod": {
+    "base": -0.0099999998,
+    "label": "Weapon Recoil",
+    "prefix": "zeti",
+    "suffix": "mag"
+   },
+   "WeaponReloadSpeedMod": {
+    "base": 0.0055550002,
+    "label": "Reload Speed",
+    "prefix": "feva",
+    "suffix": "tak"
+   },
+   "WeaponSlashDamageMod": {
+    "base": 0.013333,
+    "label": "Slash",
+    "prefix": "sci",
+    "suffix": "sus"
+   },
+   "WeaponStatusDamage": {
+    "base": 0.0099999998,
+    "label": "Status Damage",
+    "prefix": "plaga",
+    "suffix": "mna"
+   },
+   "WeaponStunChanceMod": {
+    "base": 0.0099999998,
+    "label": "Status Chance",
+    "prefix": "hexa",
+    "suffix": "dex"
+   },
+   "WeaponToxinDamageMod": {
+    "base": 0.0099999998,
+    "label": "Toxin",
+    "prefix": "toxi",
+    "suffix": "tox"
+   },
+   "WeaponViralDamageMod": {
+    "base": 0.0099999998,
+    "label": "Viral",
+    "prefix": "cari",
+    "suffix": "sco"
+   },
+   "WeaponWeakpointCriticalChance": {
+    "base": 0.0275,
+    "label": "Weak Point Critical Chance",
+    "prefix": "exiti",
+    "suffix": "eus"
+   },
+   "WeaponWeakpointDamage": {
+    "base": 0.025,
+    "label": "Weak Point Damage",
+    "prefix": "eni",
+    "suffix": "vo"
+   },
+   "WeaponZoomFovMod": {
+    "base": 0.0046660001,
+    "label": "Zoom",
+    "prefix": "hera",
+    "suffix": "lis"
+   }
+  },
+  "zaw": {
+   "ComboDurationMod": {
+    "base": 0.090000004,
+    "label": "s Combo Duration",
+    "prefix": "tempi",
+    "suffix": "nem"
+   },
+   "SlideAttackCritChanceMod": {
+    "base": 0.013334,
+    "label": "|STAT1|% Critical Chance for Slide Attack",
+    "prefix": "pleci",
+    "suffix": "nent"
+   },
+   "WeaponArmorPiercingDamageMod": {
+    "base": 0.0133,
+    "label": "Puncture",
+    "prefix": "insi",
+    "suffix": "cak"
+   },
+   "WeaponBlastDamageMod": {
+    "base": 0.0099999998,
+    "label": "Blast",
+    "prefix": "fraga",
+    "suffix": "tus"
+   },
+   "WeaponCorrosiveDamageMod": {
+    "base": 0.0099999998,
+    "label": "Corrosive",
+    "prefix": "cori",
+    "suffix": "or"
+   },
+   "WeaponCritChanceMod": {
+    "base": 0.02,
+    "label": "Critical Chance (x2 for Heavy Attacks)",
+    "prefix": "crita",
+    "suffix": "cron"
+   },
+   "WeaponCritDamageMod": {
+    "base": 0.0099999998,
+    "label": "Critical Damage",
+    "prefix": "acri",
+    "suffix": "tis"
+   },
+   "WeaponElectricityDamageMod": {
+    "base": 0.0099999998,
+    "label": "Electricity",
+    "prefix": "vexi",
+    "suffix": "tio"
+   },
+   "WeaponFactionDamageOrokin": {
+    "base": 0.0049999999,
+    "label": "Damage to Orokin",
+    "prefix": "effi",
+    "suffix": "tas"
+   },
+   "WeaponFactionDamageScaldra": {
+    "base": 0.0049999999,
+    "label": "Damage to Scaldra",
+    "prefix": "exsi",
+    "suffix": "llo"
+   },
+   "WeaponFactionDamageTechrot": {
+    "base": 0.0049999999,
+    "label": "Damage to Techrot",
+    "prefix": "muti",
+    "suffix": "gia"
+   },
+   "WeaponFireDamageMod": {
+    "base": 0.0099999998,
+    "label": "Heat",
+    "prefix": "igni",
+    "suffix": "pha"
+   },
+   "WeaponFireRateMod": {
+    "base": 0.0060999999,
+    "label": "Attack Speed",
+    "prefix": "croni",
+    "suffix": "dra"
+   },
+   "WeaponFreezeDamageMod": {
+    "base": 0.0099999998,
+    "label": "Cold",
+    "prefix": "geli",
+    "suffix": "do"
+   },
+   "WeaponGasDamageMod": {
+    "base": 0.0099999998,
+    "label": "Gas",
+    "prefix": "cali",
+    "suffix": "fel"
+   },
+   "WeaponImpactDamageMod": {
+    "base": 0.0133,
+    "label": "Impact",
+    "prefix": "magna",
+    "suffix": "ton"
+   },
+   "WeaponMagneticDamageMod": {
+    "base": 0.0099999998,
+    "label": "Magnetic",
+    "prefix": "magni",
+    "suffix": "bra"
+   },
+   "WeaponMeleeComboBonusOnHitMod": {
+    "base": 0.0065299999,
+    "label": "Additional Combo Count Chance",
+    "prefix": "laci",
+    "suffix": "nus"
+   },
+   "WeaponMeleeComboEfficiencyMod": {
+    "base": 0.0081599997,
+    "label": "Heavy Attack Efficiency",
+    "prefix": "forti",
+    "suffix": "us"
+   },
+   "WeaponMeleeComboInitialBonusMod": {
+    "base": 0.27224001,
+    "label": "Initial Combo",
+    "prefix": "para",
+    "suffix": "um"
+   },
+   "WeaponMeleeComboPointsOnHitMod": {
+    "base": -0.01165,
+    "label": "Chance to Gain Combo Count",
+    "prefix": "",
+    "suffix": ""
+   },
+   "WeaponMeleeDamageMod": {
+    "base": 0.018300001,
+    "label": "Melee Damage",
+    "prefix": "visi",
+    "suffix": "ata"
+   },
+   "WeaponMeleeFactionDamageCorpus": {
+    "base": 0.0049999999,
+    "label": "Damage to Corpus",
+    "prefix": "manti",
+    "suffix": "tron"
+   },
+   "WeaponMeleeFactionDamageGrineer": {
+    "base": 0.0049999999,
+    "label": "Damage to Grineer",
+    "prefix": "argi",
+    "suffix": "con"
+   },
+   "WeaponMeleeFactionDamageInfested": {
+    "base": 0.0049999999,
+    "label": "Damage to Infested",
+    "prefix": "pura",
+    "suffix": "ada"
+   },
+   "WeaponMeleeFinisherDamageMod": {
+    "base": 0.0133,
+    "label": "Finisher Damage",
+    "prefix": "exi",
+    "suffix": "cta"
+   },
+   "WeaponMeleeHeavyAttackChargeMod": {
+    "base": 0.0133,
+    "label": "Heavy Attack Wind Up Speed",
+    "prefix": "laci",
+    "suffix": "nus"
+   },
+   "WeaponMeleeHeavyAttackDamageMod": {
+    "base": 0.0133,
+    "label": "Melee Damage on Heavy Attack",
+    "prefix": "laci",
+    "suffix": "nus"
+   },
+   "WeaponMeleeParryAngleMod": {
+    "base": 0.0089999996,
+    "label": "Parry Angle",
+    "prefix": "laci",
+    "suffix": "nus"
+   },
+   "WeaponMeleeRangeIncMod": {
+    "base": 0.021579999,
+    "label": "Range",
+    "prefix": "locti",
+    "suffix": "tor"
+   },
+   "WeaponMeleeSlamDamageMod": {
+    "base": 0.0133,
+    "label": "Slam Attack Damage",
+    "prefix": "laci",
+    "suffix": "nus"
+   },
+   "WeaponProcTimeMod": {
+    "base": 0.01111,
+    "label": "Status Duration",
+    "prefix": "deci",
+    "suffix": "des"
+   },
+   "WeaponRadiationDamageMod": {
+    "base": 0.0099999998,
+    "label": "Radiation",
+    "prefix": "radi",
+    "suffix": "lo"
+   },
+   "WeaponSlashDamageMod": {
+    "base": 0.0133,
+    "label": "Slash",
+    "prefix": "sci",
+    "suffix": "sus"
+   },
+   "WeaponStatusDamage": {
+    "base": 0.0099999998,
+    "label": "Status Damage",
+    "prefix": "plaga",
+    "suffix": "mna"
+   },
+   "WeaponStunChanceMod": {
+    "base": 0.0099999998,
+    "label": "Status Chance",
+    "prefix": "hexa",
+    "suffix": "dex"
+   },
+   "WeaponToxinDamageMod": {
+    "base": 0.0099999998,
+    "label": "Toxin",
+    "prefix": "toxi",
+    "suffix": "tox"
+   },
+   "WeaponViralDamageMod": {
+    "base": 0.0099999998,
+    "label": "Viral",
+    "prefix": "cari",
+    "suffix": "sco"
+   }
+  }
+ }
+}
