@@ -407,7 +407,13 @@ def load_bases() -> dict[str, dict]:
 
 
 def riven_kind(weapon: RivenWeapon) -> str:
-    return "archgun" if weapon.group == "archgun" else weapon.riven_type
+    """Which riven a weapon takes in game. Warframe.Market calls Euphona Prime a "shotgun", but as a
+    secondary it takes a pistol riven: its Fire Rate only fits the pistol base value (roll 0.93 vs 0.78)."""
+    if weapon.group == "archgun":
+        return "archgun"
+    if weapon.group == "secondary" and weapon.riven_type != "kitgun":
+        return "pistol"
+    return weapon.riven_type
 
 
 def stat_base(catalog: RivenCatalog, weapon: RivenWeapon, slug: str) -> Optional[float]:

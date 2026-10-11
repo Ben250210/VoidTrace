@@ -100,8 +100,8 @@ Windows Credential Manager (`keyring`) and removed by **Sign out**. Nothing is p
 
 ## Rivens
 
-**Ctrl+Shift+R** (or tray > Rivens) opens the riven window. With a riven open in the game's
-**Item Details** view, Ctrl+Shift+R reads the card off the screen and prices it.
+**Ctrl+Shift+R** (or tray > Rivens) opens the riven window. With a riven on screen, in
+**Inventory > Mods > Cycle** or in **Item Details**, Ctrl+Shift+R reads the card and prices it.
 
 - **Find rivens**: auctions for a weapon, filtered by wanted stats, curse, buyout only and
   clean (never rolled) / rolled. Click one to copy a whisper that names the riven:
@@ -116,8 +116,9 @@ Windows Credential Manager (`keyring`) and removed by **Sign out**. Nothing is p
 Grades use the game's own base values (Warframe's Public Export, `voidtrace/data/riven_bases.json`,
 refreshed with `python tools/update_riven_bases.py`):
 `value = base x 10 x (rank + 1) x disposition x buff-count multiplier x roll`, roll 0.9-1.1.
-Screen reading is tested on 8 real cards at 2560x1600, 1920x1200 and 1680x1050 (weapon, name,
-stats, MR, rolls, rank, polarity); 16:9 screens and other UI scales are not verified yet.
+Screen reading is tested on 11 real cards (8 in Item Details, 3 on the Cycle screen, where rolls
+come from the Kuva price) at 2560x1600, 1920x1200 and 1680x1050 (weapon, name, stats, MR, rolls,
+rank, polarity); 16:9 screens and other UI scales are not verified yet.
 
 ## Price cache
 

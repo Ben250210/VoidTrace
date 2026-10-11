@@ -43,6 +43,28 @@ TEXT_BOX = (-110, -14, 220, 140)
 BAR_BOX = (-92, 126, 184, 24)
 DRAIN_BOX = (66, -156, 36, 26)
 POLARITY_BOX = (100, -156, 22, 26)  # the symbol right of the drain number
+
+
+@dataclass(frozen=True)
+class Layout:
+    """Where the card's parts sit on one game screen (reference units around the screen centre)."""
+    name: str
+    text: tuple[int, int, int, int]
+    bar: tuple[int, int, int, int]
+    drain: tuple[int, int, int, int]
+    polarity: tuple[int, int, int, int]
+    card_scale: float = 1.0                               # card size relative to Item Details
+    cost: Optional[tuple[int, int, int, int]] = None      # "CYCLE FOR 900" (Cycle screen only)
+
+
+ITEM_DETAILS = Layout("Item Details", TEXT_BOX, BAR_BOX, DRAIN_BOX, POLARITY_BOX)
+# Inventory > Mods > a riven > Cycle: where most players look at their rivens. The card is about
+# 1.25x bigger and lower, and its bar shows no rolls count; the Kuva price of the next cycle does.
+CYCLE = Layout("Cycle", text=(-140, 136, 280, 148), bar=(-110, 286, 220, 34), drain=(90, -62, 40, 32),
+               polarity=(122, -60, 32, 30), card_scale=1.25, cost=(-100, 406, 200, 32))
+LAYOUTS = (ITEM_DETAILS, CYCLE)
+# Kuva for the next cycle, by cycles already done; from the 10th on it stays at 3500.
+CYCLE_COSTS = (900, 1000, 1200, 1400, 1700, 2000, 2350, 2750, 3150, 3500)
 UPSCALE = 4  # at 2560x1600 (scale 4/3); smaller screens get more, so the text always ends up one size
 TUNED_SCALE = 2560 / 1920
 BASE_DRAIN = 10  # a rank-0 riven costs 10, +1 per rank
@@ -148,9 +170,11 @@ def read_polarity(img: np.ndarray, upscale: float) -> Optional[str]:
     sizes the V's two arms come apart, so all symbol pieces are measured together.
     """
     big = cv2.resize(img, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
-    # The symbol is pale lavender; Otsu split Sobek's bright orange art from the dark instead.
+    # The symbol is pale lavender in Item Details and saturated purple on the Cycle screen; picking it
+    # by colour keeps out art like Sobek's bright orange, which Otsu took for the symbol.
     hsv = cv2.cvtColor(big, cv2.COLOR_BGR2HSV)
-    b = ((hsv[..., 2] > 150) & (hsv[..., 1] < 110)).astype(np.uint8) * 255
+    hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    b = ((val > 140) & ((sat < 110) | ((hue >= 115) & (hue <= 165)))).astype(np.uint8) * 255
     n, labels, stats, _ = cv2.connectedComponentsWithStats(b, connectivity=8)
     h, w = b.shape
     # The card frame's edge runs across the whole crop; specks are tiny. What is left is the symbol.
@@ -164,12 +188,26 @@ def read_polarity(img: np.ndarray, upscale: float) -> Optional[str]:
     near = [i for i in parts if stats[i, 0] < mx + mw + pad and stats[i, 0] + stats[i, 2] > mx - pad
             and stats[i, 1] < my + mh + pad and stats[i, 1] + stats[i, 3] > my - pad]
     mask = np.isin(labels, near).astype(np.uint8)
-    points = cv2.findNonZero(mask)
+    # Vazarin is drawn filled in Item Details but as an outline on the Cycle screen: fill the holes so
+    # both measure as the solid triangle (0.82-0.92), while Madurai's open V stays at 0.57-0.64.
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    filled = np.zeros_like(mask)
+    cv2.drawContours(filled, contours, -1, 1, -1)
+    points = cv2.findNonZero(filled)
     x, y, gw, gh = cv2.boundingRect(points)
     if gw / gh > 1.6:
         return "naramon"
-    solidity = mask.sum() / max(1.0, cv2.contourArea(cv2.convexHull(points)))
+    solidity = filled.sum() / max(1.0, cv2.contourArea(cv2.convexHull(points)))
     return "vazarin" if solidity > 0.72 else "madurai"
+
+
+def rolls_from_cost(text: str) -> Optional[int]:
+    """Rolls done, from the Cycle screen's "CYCLE FOR 900" (900 = never cycled). 3500 means 9 or more."""
+    for number in re.findall(r"\d[\d,.]*", text):
+        cost = int(re.sub(r"[,.]", "", number))
+        if cost in CYCLE_COSTS:
+            return CYCLE_COSTS.index(cost)
+    return None
 
 
 def read_drain(binary: np.ndarray) -> Optional[int]:
@@ -232,7 +270,8 @@ def parse_stat_lines(lines: list[str]) -> tuple[int, list[tuple[Optional[str], f
         line = _clean(line)
         # A sign right before the number marks a stat; junk read in front of it ("3  +96.8%")
         # must not be taken for the value.
-        m = re.search(r"[+\-−–xX×]\s?\d", line) or re.search(r"\d", line)
+        # A digit inside a word is part of the title, not a stat: "Efv-8 Mars Veximag".
+        m = re.search(r"(?<![A-Za-z])[+\-−–xX×]\s?\d", line) or re.search(r"(?<![A-Za-z\-])\d", line)
         if not m:
             if stats and line and not re.search(r"MR\s*\d", line) and len(line) < 12:
                 stats[-1] = (*stats[-1][:3], stats[-1][3] + " " + line, stats[-1][4])  # wrapped label: "Bows)"
@@ -251,7 +290,14 @@ def parse_stat_lines(lines: list[str]) -> tuple[int, list[tuple[Optional[str], f
 
 def parse_title(catalog: RivenCatalog, lines: list[str]) -> tuple[Optional[RivenWeapon], str, float]:
     """Weapon and riven name from the 1-2 lines above the stats ("Ceramic Dagger" / "Manti-parades")."""
-    words_pool = [re.findall(r"[A-Za-z][A-Za-z\-]*", _clean(line)) for line in lines]
+    # A long title wraps at the riven name's hyphen ("Euphona Prime Croni-" / "vexitron"): rejoin it.
+    joined: list[str] = []
+    for line in (_clean(line) for line in lines):
+        if joined and joined[-1].endswith("-"):
+            joined[-1] += line.lstrip()
+        else:
+            joined.append(line)
+    words_pool = [re.findall(r"[A-Za-z][A-Za-z0-9\-]*", line) for line in joined]  # keeps "Efv-8"
     candidates = []
     for take in (1, 2):
         if len(words_pool) >= take:
@@ -283,10 +329,20 @@ def _mode(values):
 
 
 def read_riven(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float = 1.0) -> RivenRead:
+    """Read the riven card on Item Details or the Cycle screen, whichever is showing."""
+    read = None
+    for layout in LAYOUTS:
+        read = _read_layout(frame, catalog, ui_scale, layout)
+        if read.ok:
+            return read
+    return read
+
+
+def _read_layout(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float, layout: Layout) -> RivenRead:
     """Read the card at several upscales and keep the majority answer for each field."""
-    base = upscale_for(frame, ui_scale)
+    base = upscale_for(frame, ui_scale) / layout.card_scale  # bigger card: less enlarging needed
     with ThreadPoolExecutor(max_workers=len(VOTE_FACTORS)) as pool:  # each pass runs Tesseract
-        reads = list(pool.map(lambda f: _read_once(frame, catalog, ui_scale, base * f), VOTE_FACTORS))
+        reads = list(pool.map(lambda f: _read_once(frame, catalog, ui_scale, base * f, layout), VOTE_FACTORS))
     found = [r for r in reads if r[0].ok]
     if not found:
         return reads[0][0]
@@ -352,10 +408,10 @@ def read_riven(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float = 1.0) 
     return RivenRead(draft, warnings, best.raw)
 
 
-def _read_once(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float,
-               up: float) -> tuple[RivenRead, Optional[int], Optional[int], Optional[int]]:
+def _read_once(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float, up: float, layout: Layout = ITEM_DETAILS
+) -> tuple[RivenRead, Optional[int], Optional[int], Optional[int]]:
     """One OCR pass: (read, MR, rolls, drain)."""
-    text_img = binarize(crop(frame, ref_box(frame, TEXT_BOX, ui_scale)), up)
+    text_img = binarize(crop(frame, ref_box(frame, layout.text, ui_scale)), up)
     raw = ocr(text_img, psm=6)
     lines = [line for line in raw.splitlines() if line.strip()]
     first, stat_lines = parse_stat_lines(lines)
@@ -416,9 +472,11 @@ def _read_once(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float,
         attrs.append(RivenAttr(slug, signed(value), positive))
         alternates[slug] = [signed(v) for v in others]
 
-    mr, rolls = read_bar(binarize(crop(frame, ref_box(frame, BAR_BOX, ui_scale)), up))
-    drain = read_drain(binarize(crop(frame, ref_box(frame, DRAIN_BOX, ui_scale)), up))
-    polarity = read_polarity(crop(frame, ref_box(frame, POLARITY_BOX, ui_scale)), up)
+    mr, rolls = read_bar(binarize(crop(frame, ref_box(frame, layout.bar, ui_scale)), up))
+    if layout.cost is not None:  # the Cycle screen's bar has no rolls count
+        rolls = rolls_from_cost(ocr(binarize(crop(frame, ref_box(frame, layout.cost, ui_scale)), up), psm=7))
+    drain = read_drain(binarize(crop(frame, ref_box(frame, layout.drain, ui_scale)), up))
+    polarity = read_polarity(crop(frame, ref_box(frame, layout.polarity, ui_scale)), up)
     draft = RivenDraft(weapon=weapon.slug if weapon else "", name=name, attrs=tuple(attrs),
                        polarity=polarity or "")
     return RivenRead(draft, warnings, raw, alternates), mr, rolls, drain

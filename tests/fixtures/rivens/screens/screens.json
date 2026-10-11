@@ -86,5 +86,38 @@
    566
   ],
   "source": "Screenshot 2026-10-11 145602.png (live Ctrl+Shift+R test)"
+ },
+ "efv_8_mars_veximag": {
+  "screen": [
+   2559,
+   1599
+  ],
+  "offset": [
+   1072,
+   686
+  ],
+  "source": "Screenshot 2026-10-11 153915.png (Cycle screen)"
+ },
+ "euphona_prime_croni-vexitron": {
+  "screen": [
+   2559,
+   1599
+  ],
+  "offset": [
+   1072,
+   686
+  ],
+  "source": "Screenshot 2026-10-11 154027.png (Cycle screen)"
+ },
+ "akvasto_acri-decitin": {
+  "screen": [
+   2559,
+   1599
+  ],
+  "offset": [
+   1072,
+   686
+  ],
+  "source": "Screenshot 2026-10-11 154116.png (Cycle screen)"
  }
 }

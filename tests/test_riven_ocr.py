@@ -44,11 +44,22 @@ EXPECTED = {
     "burston_live": ("burston", "sati-visicon", 9, 3, 8,
                      [("damage_vs_grineer", 1.47, True), ("base_damage_/_melee_damage", 174.7, True),
                       ("multishot", 96.8, True)]),
+    # Inventory > Mods > Cycle (15:39-15:41): bigger card, rolls from "CYCLE FOR 900".
+    "efv_8_mars_veximag": ("efv_8_mars", "veximag", 9, 0, 8,
+                           [("electric_damage", 94.4, True), ("recoil", -92.8, True)]),
+    "euphona_prime_croni-vexitron": ("euphona_prime", "croni-vexitron", 11, 0, 8,
+                                     [("fire_rate_/_attack_speed", 49.7, True), ("damage_vs_corpus", 1.3, True),
+                                      ("electric_damage", 59.6, True)]),
+    "akvasto_acri-decitin": ("akvasto", "acri-decitin", 16, 0, 8,
+                             [("status_duration", 87.6, True), ("magazine_capacity", 42.4, True),
+                              ("critical_damage", 87.5, True)]),
 }
 
 POLARITY = {"sobek_satidra": "madurai", "burston_sati-visicon": "naramon", "hikou_igni-insitron": "vazarin",
             "balla_acriata": "madurai", "dread_manti-vexiata": "madurai", "balla_acrido": "naramon",
-            "ceramic_dagger_manti-parades": "madurai", "burston_live": "naramon"}
+            "ceramic_dagger_manti-parades": "madurai", "burston_live": "naramon",
+            "efv_8_mars_veximag": "madurai", "euphona_prime_croni-vexitron": "vazarin",
+            "akvasto_acri-decitin": "vazarin"}
 
 
 @pytest.fixture(scope="module")
@@ -99,7 +110,7 @@ def test_stat_line_parsing_survives_ocr_slips():
 @pytest.mark.parametrize("size, allowed_misses", [((1920, 1200), 0), ((1680, 1050), 1)])
 def test_reads_the_same_cards_on_smaller_screens(size, allowed_misses, catalog):
     # Downscaled screenshots are a harsher test than the game rendering natively at that size.
-    # At 1680x1050 the live Burston loses its MR, rolls and a 6 (96.8 -> 90.8): 7 of 8 exact.
+    # At 1680x1050 the live Burston loses its MR, rolls and a 6 (96.8 -> 90.8): 10 of 11 exact.
     misses = []
     for key, (weapon, name, mr, rolls, rank, attrs) in EXPECTED.items():
         d = read_riven(cv2.resize(screen(key), size, interpolation=cv2.INTER_AREA), catalog).draft
@@ -122,3 +133,12 @@ def test_slash_read_for_a_seven():
     assert 174.7 in number_variants("+1/4./% Damage")      # every 7 read as "/"
     assert 174.7 in number_variants("+1/74.7/% Damage")    # a stray extra "/"
     assert number_variants("x1.47 Damage to Grineer") == [1.47]
+
+
+def test_rolls_from_the_cycle_price():
+    from voidtrace.riven_ocr import rolls_from_cost
+
+    assert rolls_from_cost("CYCLE FOR ©-..900") == 0
+    assert rolls_from_cost("CYCLE FOR 1,400") == 3
+    assert rolls_from_cost("CYCLE FOR 3500") == 9  # 9 or more: the price stops rising
+    assert rolls_from_cost("CYCLE FOR") is None
