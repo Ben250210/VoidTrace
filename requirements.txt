@@ -6,3 +6,4 @@ rapidfuzz>=3.0
 requests>=2.31
 PyQt6>=6.6
 psutil>=5.9
+keyring>=25

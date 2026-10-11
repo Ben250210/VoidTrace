@@ -1,6 +1,8 @@
-"""Shared Warframe.Market API access (public, read-only, no auth).
+"""Shared Warframe.Market API access.
 
-Requests are spaced to stay under the site's ~3 requests/second guidance.
+Public data needs no account. Signed-in calls (your own orders) go through `request()` with a
+token from voidtrace.account. Every request is spaced to stay under the site's ~3 requests/second
+guidance.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ HEADERS = {
     "Accept": "application/json",
     "Language": "en",
     "Platform": "pc",
-    "User-Agent": "VoidTrace/0.1 (read-only Warframe companion)",
+    "User-Agent": "VoidTrace/0.2 (Warframe companion)",
 }
 MIN_INTERVAL = 0.35  # seconds between requests
 
@@ -39,11 +41,18 @@ class MarketClient:
         return self._get(API_BASE_V1 + path)["payload"]
 
     def _get(self, url: str) -> Any:
+        resp = self.request("GET", url)
+        resp.raise_for_status()
+        return resp.json()
+
+    def request(self, method: str, url: str, headers: Optional[dict] = None, json: Any = None) -> requests.Response:
+        """Rate-limited request; the caller checks the status. `url` may be a v1/v2 path or a full URL."""
+        if url.startswith("/"):
+            url = API_BASE + url
         with self._lock:
             wait = MIN_INTERVAL - (time.monotonic() - self._last_request)
             if wait > 0:
                 time.sleep(wait)
             self._last_request = time.monotonic()
-        resp = self.session.get(url, headers=HEADERS, timeout=self.timeout)
-        resp.raise_for_status()
-        return resp.json()
+        return self.session.request(method, url, headers={**HEADERS, **(headers or {})}, json=json,
+                                    timeout=self.timeout)

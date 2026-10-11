@@ -1,4 +1,5 @@
-"""Market window: search any item, see who is selling it right now, click a seller to copy the whisper.
+"""Market window: search any item, see who is selling it right now, click a seller to copy the whisper,
+and (signed in) post and manage your own Warframe.Market orders.
 
 A normal clickable window (unlike the overlay), kept on top of Borderless Fullscreen Warframe.
 """
@@ -23,6 +24,8 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QPushButton,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -30,6 +33,7 @@ from PyQt6.QtWidgets import (
 )
 from rapidfuzz import fuzz, process, utils
 
+from .account import Account
 from .icons import platinum_icon
 from .items import CatalogItem
 from .sellers import SellerOrder, SellerService, rank_counts, whisper_text
@@ -50,6 +54,10 @@ QHeaderView::section { background: #0f1119; color: #9ba0b5; border: none; border
 QLabel#title { font-size: 18px; font-weight: 600; }
 QLabel#toast { color: #7cc99c; }
 QLabel#muted { color: #9ba0b5; }
+QTabWidget::pane { border: none; border-top: 1px solid #2a2f45; }
+QTabBar::tab { background: #0f1119; color: #9ba0b5; padding: 7px 14px; border: none; }
+QTabBar::tab:selected { color: #e7e5dc; border-bottom: 2px solid #d9b45c; }
+QPushButton#account { background: #171a26; border: 1px solid #2a2f45; border-radius: 4px; padding: 5px 10px; }
 """
 
 COLUMNS = ["Seller", "Status", "Rank", "Price", "Qty", "Rep"]
@@ -126,9 +134,11 @@ def item_title(item: CatalogItem) -> str:
 
 class MarketWindow(QWidget):
     _sellers_ready = pyqtSignal(int, list)
+    _async_done = pyqtSignal(object, object)  # (callback, result) run on the UI thread
     _sellers_failed = pyqtSignal(int, str)
 
-    def __init__(self, catalog: Sequence[CatalogItem], sellers: SellerService) -> None:
+    def __init__(self, catalog: Sequence[CatalogItem], sellers: SellerService,
+                 account: Optional[Account] = None) -> None:
         super().__init__()
         self.setWindowTitle("VoidTrace market")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint)
@@ -136,6 +146,8 @@ class MarketWindow(QWidget):
         self.resize(640, 560)
         self.catalog = list(catalog)
         self.by_slug = {item.slug: item for item in self.catalog}
+        self.by_id = {item.id: item for item in self.catalog if item.id}
+        self.account = account if account is not None else Account(sellers.client)
         self.sellers = sellers
         self.item: Optional[CatalogItem] = None
         self.rows: list[SellerOrder] = []
@@ -172,18 +184,41 @@ class MarketWindow(QWidget):
         self._toast_timer = QTimer(self, singleShot=True, interval=4000)
         self._toast_timer.timeout.connect(lambda: self.toast.setText(""))
 
+        from .trade_panel import MyOrdersPanel, PostOrderPanel  # imported here: it imports this module's types
+
+        self.account_button = QPushButton(objectName="account")
+        self.account_button.clicked.connect(self._account_clicked)
+        search_row = QHBoxLayout()
+        search_row.addWidget(self.search, 1)
+        search_row.addWidget(self.account_button)
+
         controls = QHBoxLayout()
         controls.addWidget(self.title, 1)
         controls.addWidget(self.rank)
         controls.addWidget(self.online)
+        buy_tab = QWidget()
+        buy_layout = QVBoxLayout(buy_tab)
+        buy_layout.setContentsMargins(0, 8, 0, 0)
+        buy_layout.addLayout(controls)
+        buy_layout.addWidget(QLabel("Click a seller to copy the whisper, then paste it in game chat.", objectName="muted"))
+        buy_layout.addWidget(self.table, 1)
+        buy_layout.addWidget(self.status)
+
+        self.post_panel = PostOrderPanel(self)
+        self.orders_panel = MyOrdersPanel(self)
+        self.tabs = QTabWidget()
+        self.tabs.addTab(buy_tab, "Buy from players")
+        self.tabs.addTab(self.post_panel, "Post order")
+        self.tabs.addTab(self.orders_panel, "My orders")
+        self.tabs.currentChanged.connect(self._tab_changed)
+
         layout = QVBoxLayout(self)
-        layout.addWidget(self.search)
+        layout.addLayout(search_row)
         layout.addWidget(self.suggestions)
-        layout.addLayout(controls)
-        layout.addWidget(QLabel("Click a seller to copy the whisper, then paste it in game chat.", objectName="muted"))
-        layout.addWidget(self.table, 1)
-        layout.addWidget(self.status)
+        layout.addWidget(self.tabs, 1)
         layout.addWidget(self.toast)
+        self._async_done.connect(lambda callback, result: callback(result))
+        self.account_changed()
 
         self.search.textEdited.connect(self._on_search)
         self.search.returnPressed.connect(self._pick_first_suggestion)
@@ -230,6 +265,7 @@ class MarketWindow(QWidget):
             self.rank.setCurrentIndex(0 if rank is None else rank + 1)
         self.rank.setVisible(item.max_rank is not None)
         self.rank.blockSignals(False)
+        self.post_panel.set_item(rank)
         self.show()
         self.raise_()
         self.activateWindow()
@@ -314,6 +350,45 @@ class MarketWindow(QWidget):
         QApplication.clipboard().setText(self.whisper_for(row))
         self.toast.setText(f"Copied whisper to {self.rows[row].ingame_name}. Paste it in game chat.")
         self._toast_timer.start()
+
+    # --- account + background work -----------------------------------------------------
+
+    def run_async(self, fn, on_ok, on_err=None) -> None:
+        """Run `fn` off the UI thread; call on_ok(result) or on_err(exception) back on the UI thread."""
+        def work():
+            try:
+                self._async_done.emit(on_ok, fn())
+            except Exception as exc:  # reported to the panel that asked, never crashes the UI
+                log.warning("market request failed: %s", exc)
+                if on_err is not None:
+                    self._async_done.emit(on_err, exc)
+
+        self._executor.submit(work)
+
+    def account_changed(self) -> None:
+        if self.account.signed_in:
+            self.account_button.setText(f"Signed in as {self.account.ingame_name or 'you'}  \u00b7  Sign out")
+        else:
+            self.account_button.setText("Sign in to Warframe.Market")
+        self.post_panel.update_price()
+        if self.tabs.currentWidget() is self.orders_panel:
+            self.orders_panel.refresh()
+
+    def show_sign_in(self) -> None:
+        from .trade_panel import SignInDialog
+
+        SignInDialog(self).exec()
+
+    def _account_clicked(self) -> None:
+        if self.account.signed_in:
+            self.account.sign_out()
+            self.account_changed()
+        else:
+            self.show_sign_in()
+
+    def _tab_changed(self, index: int) -> None:
+        if self.tabs.widget(index) is self.orders_panel:
+            self.orders_panel.refresh()
 
     def closeEvent(self, event) -> None:  # noqa: N802
         # Closing only hides it; the app keeps running in the tray.

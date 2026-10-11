@@ -166,13 +166,30 @@ def test_outliers_are_judged_within_each_rank():
 
 # --- market window ----------------------------------------------------------------------
 
+class FakeTopClient:
+    """Answers the top-5 request the Post order tab makes when an item opens."""
+
+    def get(self, path):
+        return {"sell": [], "buy": []}
+
+
 class FakeSellers:
     def __init__(self, rows):
         self.rows, self.asked = rows, []
+        self.client = FakeTopClient()
 
     def sellers(self, slug, rank=None, include_online=True):
         self.asked.append((slug, rank, include_online))
         return self.rows
+
+
+@pytest.fixture(autouse=True)
+def no_real_keyring(monkeypatch):
+    from test_account import MemoryKeyring
+    import voidtrace.account as account_module
+
+    monkeypatch.setattr(account_module.TokenStore, "__init__",
+                        lambda self, backend=None: setattr(self, "_kr", backend or MemoryKeyring()))
 
 
 def _wait(qapp, predicate, timeout=2.0):
@@ -237,3 +254,75 @@ def test_hotkey_filter_reacts_only_to_its_own_hotkey():
     assert f.handle(WM_HOTKEY, HOTKEY_ID + 1) is False
     assert f.handle(0x0100, HOTKEY_ID) is False  # WM_KEYDOWN
     assert calls == [1]
+
+
+# --- posting orders from the window ------------------------------------------------------
+
+def _signed_in_window(qapp, top):
+    from test_account import FakeHTTP, MemoryKeyring
+    from voidtrace.account import Account, TokenStore
+
+    http = FakeHTTP()
+    http.top = top
+    acc = Account(http, TokenStore(MemoryKeyring()), device="test")
+    acc.sign_in("me", "hunter2")
+    sellers = FakeSellers([])
+    sellers.client = http
+    catalog = CATALOG + [CatalogItem("Necramech Fury", "necramech_fury", 3, ("mod",), "5f4ed3f9d5c36d0086f55b0a")]
+    window = MarketWindow(catalog, sellers, account=acc)
+    return window, http
+
+
+def _top_order(name, plat, status="ingame"):
+    return {"platinum": plat, "quantity": 1, "rank": 3, "user": {"ingameName": name, "reputation": 5, "status": status}}
+
+
+def test_post_order_tab_shows_top_five_and_posts_undercut(qapp):
+    top = {"sell": [_top_order("August159", 9), _top_order("attentionTOT", 10)], "buy": [_top_order("buyer", 6)]}
+    window, http = _signed_in_window(qapp, top)
+    window.open_item("necramech_fury")
+    panel = window.post_panel
+    _wait(qapp, lambda: panel.sell_table.rowCount() == 2)
+    assert "maxed rank" in panel.sell_title.text()
+    assert http.calls[-1][1] == "/orders/item/necramech_fury/top?rank=3"   # same rank as the order
+    assert panel.price() == 9 and "9p" in panel.price_label.text()          # match lowest
+    panel.mode_offset.setChecked(True)
+    panel.offset.setValue(-1)
+    assert panel.price() == 8
+    panel.post_order()
+    _wait(qapp, lambda: "Posted" in panel.result.text())
+    method, url, headers, body = next(c for c in http.calls if c[1] == "/order")
+    assert body == {"itemId": "5f4ed3f9d5c36d0086f55b0a", "type": "sell", "platinum": 8, "quantity": 1,
+                    "visible": True, "rank": 3}
+    window.shutdown()
+
+
+def test_buy_side_matches_highest_buyer(qapp):
+    top = {"sell": [_top_order("s", 9)], "buy": [_top_order("b1", 5), _top_order("b2", 7)]}
+    window, http = _signed_in_window(qapp, top)
+    window.open_item("necramech_fury")
+    panel = window.post_panel
+    _wait(qapp, lambda: panel.buy_table.rowCount() == 2)
+    panel.side.setCurrentIndex(1)
+    assert panel.price() == 7
+    window.shutdown()
+
+
+def test_signed_out_post_button_asks_to_sign_in(qapp):
+    window = MarketWindow(CATALOG, FakeSellers([]))
+    assert not window.account.signed_in
+    assert window.post_panel.post.text() == "Sign in to post"
+    assert window.account_button.text() == "Sign in to Warframe.Market"
+    window.shutdown()
+
+
+def test_my_orders_lists_and_deletes(qapp):
+    window, http = _signed_in_window(qapp, {"sell": [], "buy": []})
+    window.account.create_order("5f4ed3f9d5c36d0086f55b0a", "sell", 12, rank=3)
+    panel = window.orders_panel
+    panel.refresh()
+    _wait(qapp, lambda: panel.table.rowCount() == 1)
+    assert panel.table.item(0, 0).text() == "Necramech Fury"
+    panel.delete(panel.orders[0])
+    _wait(qapp, lambda: http.orders == [] and panel.table.rowCount() == 0)
+    window.shutdown()

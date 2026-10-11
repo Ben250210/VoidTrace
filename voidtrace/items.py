@@ -39,6 +39,7 @@ class CatalogItem:
     slug: str
     max_rank: Optional[int]
     tags: tuple[str, ...]
+    id: str = ""  # Warframe.Market item id, needed to post orders
 
 
 def default_cache_dir() -> Path:
@@ -58,6 +59,7 @@ def compact(entry: dict) -> dict:
         return entry
     return {
         "name": entry["i18n"]["en"]["name"],
+        "id": entry.get("id", ""),
         "slug": entry["slug"],
         "ducats": int(entry.get("ducats") or 0),
         "tags": list(entry.get("tags", ())),
@@ -77,7 +79,8 @@ def parse_items(data: list[dict]) -> list[Item]:
 
 def parse_catalog(data: list[dict]) -> list[CatalogItem]:
     return sorted(
-        (CatalogItem(e["name"], e["slug"], e.get("max_rank"), tuple(e.get("tags", ()))) for e in map(compact, data)),
+        (CatalogItem(e["name"], e["slug"], e.get("max_rank"), tuple(e.get("tags", ())), e.get("id", ""))
+         for e in map(compact, data)),
         key=lambda item: item.name,
     )
 
@@ -117,8 +120,8 @@ def _read_cache(path: Path) -> Optional[tuple[float, list[dict]]]:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         items = raw["items"]
-        if items and "tags" not in items[0]:
-            return None  # written by an older version (relic rewards only)
+        if items and ("tags" not in items[0] or "id" not in items[0]):
+            return None  # written by an older version (no tags, or no item ids for posting orders)
         return raw["fetched_at"], items
     except (OSError, ValueError, KeyError, TypeError, IndexError):
         return None
