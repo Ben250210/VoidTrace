@@ -5,9 +5,10 @@ closing, and logs nothing for Item Details, so the screen itself is watched inst
 carries the same emblem at its top centre; while Warframe is the active window, the watcher grabs the
 screen about every 0.7 s and matches that emblem at the two places it sits (a few milliseconds).
 
-  * a card appears, or its text changes (another riven, or after a cycle): once two grabs in a row
-    agree, `card_shown(frame, layout)` is emitted with the settled frame
-  * the card is gone for two grabs in a row: `card_hidden()`
+  * a card appears (two grabs agree) or its text changes for good (three grabs agree: another riven,
+    or a new roll): `card_shown(frame, layout)` with the settled frame
+  * the card is gone for three grabs in a row: `card_hidden()`; if the same card is back right after,
+    `card_back()`, so it is not read again
 
 Matched on the user's 11 cards at 0.80-1.00; 13 other game screenshots scored at most 0.44.
 Read-only, like the rest of VoidTrace: it only looks at the screen.
@@ -35,7 +36,10 @@ EMBLEMS = ((ITEM_DETAILS, (-22, -162, 44, 32), DATA / "emblem_item_details.png")
 EMBLEM_SIZE = (64, 48)
 MATCH_MIN = 0.7          # positives 0.80-1.00, other screens <= 0.44
 INTERVAL_MS = 700
-CHANGE_MIN = 10.0        # mean grey-level difference of the text area that counts as a different card
+CHANGE_MIN = 0.35        # text-shape difference (1 - overlap) that counts as a different card
+SETTLE_GRABS = 2         # grabs that must agree before a first card is read
+CHANGE_GRABS = 3         # ... and before a changed card is read again
+MISS_GRABS = 3           # grabs without the card before the popup hides (about 2 s)
 
 
 def _emblem(frame: np.ndarray, box) -> np.ndarray:
@@ -69,14 +73,22 @@ def detect_card(frame: np.ndarray) -> Optional[Layout]:
 
 
 def text_signature(frame: np.ndarray, layout: Layout) -> np.ndarray:
-    """A small picture of the card's text, to notice when it shows another riven."""
+    """The shape of the card's text (which pixels are letters), to notice when it shows another riven.
+
+    Shape, not brightness: on the Cycle screen lightning keeps crossing the card, and a brightness
+    comparison took the same riven for a new one every few seconds. A bright streak across the text
+    moves the shape by at most 0.22 (1 - overlap); two different rivens differ by 0.76 on average.
+    """
     gray = cv2.cvtColor(crop(frame, ref_box(frame, layout.text)), cv2.COLOR_BGR2GRAY)
-    return cv2.resize(gray, (64, 32), interpolation=cv2.INTER_AREA).astype(np.float32)
+    gray = cv2.resize(gray, (96, 48), interpolation=cv2.INTER_AREA)
+    _, mask = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return mask > 0
 
 
 class RivenScreenWatcher(QObject):
-    card_shown = pyqtSignal(object, object)   # (frame, Layout)
+    card_shown = pyqtSignal(object, object)   # (frame, Layout): a riven to read
     card_hidden = pyqtSignal()
+    card_back = pyqtSignal()                  # the card just announced is showing again: no new read
 
     def __init__(self, grab: Callable[[], np.ndarray], foreground: Optional[Callable[[], bool]] = None,
                  interval_ms: int = INTERVAL_MS) -> None:
@@ -85,8 +97,9 @@ class RivenScreenWatcher(QObject):
         self.foreground = foreground
         self.timer = QTimer(self, interval=interval_ms)
         self.timer.timeout.connect(self.tick)
-        self._seen: Optional[np.ndarray] = None      # text of the card last announced
-        self._pending: Optional[np.ndarray] = None   # text of a new card waiting to settle
+        self._seen: Optional[np.ndarray] = None      # text of the card last announced (kept while hidden)
+        self._pending: Optional[np.ndarray] = None   # text of a different card waiting to settle
+        self._agree = 0
         self._misses = 0
         self.showing = False
 
@@ -95,6 +108,7 @@ class RivenScreenWatcher(QObject):
 
     def stop(self) -> None:
         self.timer.stop()
+        self._seen = None
         self._hide()
 
     def tick(self) -> None:
@@ -113,28 +127,36 @@ class RivenScreenWatcher(QObject):
         self._misses = 0
         text = text_signature(frame, layout)
         if self._seen is not None and _same(text, self._seen):
-            self._pending = None
-            return  # the card already announced is still there
+            self._pending, self._agree = None, 0
+            if not self.showing:  # back after a short gap (lightning over the emblem): same riven
+                self.showing = True
+                self.card_back.emit()
+            return
         if self._pending is not None and _same(text, self._pending):
-            # Two grabs agree: the card has finished animating in (or the new roll has settled).
-            self._seen, self._pending = text, None
+            self._agree += 1
+        else:
+            self._pending, self._agree = text, 1
+        # A first card needs 2 agreeing grabs (it has finished animating in); a change while a card
+        # is showing needs 3, so a passing flash cannot pass for a new roll.
+        if self._agree >= (CHANGE_GRABS if self.showing else SETTLE_GRABS):
+            self._seen, self._pending, self._agree = text, None, 0
             self.showing = True
             self.card_shown.emit(frame, layout)
-        else:
-            self._pending = text
 
     def _miss(self) -> None:
-        self._pending = None
+        self._pending, self._agree = None, 0
         self._misses += 1
-        if self._misses >= 2:
+        if self._misses >= MISS_GRABS:
             self._hide()
 
     def _hide(self) -> None:
-        self._seen = None
         if self.showing:
             self.showing = False
             self.card_hidden.emit()
 
 
 def _same(a: np.ndarray, b: np.ndarray) -> bool:
-    return a.shape == b.shape and float(np.abs(a - b).mean()) < CHANGE_MIN
+    if a.shape != b.shape:
+        return False
+    union = int((a | b).sum())
+    return union == 0 or 1 - int((a & b).sum()) / union < CHANGE_MIN

@@ -310,6 +310,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                                        None if args.any_window else warframe_is_foreground)
     riven_watcher.card_shown.connect(riven_assistant.card_shown)
     riven_watcher.card_hidden.connect(riven_assistant.card_hidden)
+    riven_watcher.card_back.connect(riven_assistant.card_back)
 
     def toggle_riven_popup(on: bool) -> None:
         if on:

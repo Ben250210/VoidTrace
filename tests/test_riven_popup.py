@@ -58,24 +58,62 @@ def test_no_card_on_an_empty_screen():
 def test_watcher_announces_a_settled_card_once_and_hides_it(qapp):
     blank = np.zeros((1600, 2560, 3), dtype=np.uint8)
     hikou, burston = screen("hikou_igni-insitron"), screen("burston_sati-visicon")
-    frames = iter([blank, hikou, hikou, hikou, burston, burston, blank, blank])
+    frames = iter([blank, hikou, hikou, hikou, burston, burston, burston, blank, blank, blank])
     shown, hidden = [], []
     watcher = RivenScreenWatcher(lambda: next(frames))
     watcher.card_shown.connect(lambda frame, layout: shown.append(frame is hikou or frame is burston))
     watcher.card_hidden.connect(lambda: hidden.append(True))
-    for _ in range(8):
+    for _ in range(10):
         watcher.tick()
-    assert len(shown) == 2       # the Hikou once (after two agreeing grabs), then the Burston
-    assert hidden == [True]      # after two empty grabs
+    assert len(shown) == 2       # the Hikou once (two agreeing grabs), the Burston once (three, as a change)
+    assert hidden == [True]      # after three empty grabs
+
+
+def _streaked(frame, seed):
+    """The same card with a bright diagonal streak across its text, like the Cycle screen's lightning."""
+    import cv2
+    from voidtrace.riven_ocr import ref_box
+
+    out = frame.copy()
+    box = ref_box(out, ITEM_DETAILS.text)
+    rng = np.random.default_rng(seed)
+    x0, x1 = rng.integers(box.x, box.x + box.w, size=2)
+    cv2.line(out, (int(x0), box.y), (int(x1), box.y + box.h), (255, 180, 230), 3)
+    return out
+
+
+def test_lightning_over_the_card_is_not_a_new_riven(qapp):
+    hikou = screen("hikou_igni-insitron")
+    frames = iter([hikou, hikou] + [_streaked(hikou, i) for i in range(12)])
+    shown = []
+    watcher = RivenScreenWatcher(lambda: next(frames))
+    watcher.card_shown.connect(lambda frame, layout: shown.append(True))
+    for _ in range(14):
+        watcher.tick()
+    assert shown == [True]  # read once; twelve flashes later, still once
+
+
+def test_a_short_gap_brings_the_same_card_back_without_a_new_read(qapp):
+    blank = np.zeros((1600, 2560, 3), dtype=np.uint8)
+    hikou = screen("hikou_igni-insitron")
+    frames = iter([hikou, hikou, blank, blank, blank, hikou])
+    shown, hidden, back = [], [], []
+    watcher = RivenScreenWatcher(lambda: next(frames))
+    watcher.card_shown.connect(lambda frame, layout: shown.append(True))
+    watcher.card_hidden.connect(lambda: hidden.append(True))
+    watcher.card_back.connect(lambda: back.append(True))
+    for _ in range(6):
+        watcher.tick()
+    assert (len(shown), len(hidden), len(back)) == (1, 1, 1)
 
 
 def test_watcher_hides_when_warframe_is_not_in_front(qapp):
     hikou = screen("hikou_igni-insitron")
-    in_front = iter([True, True, False, False])
+    in_front = iter([True, True, False, False, False])
     hidden = []
     watcher = RivenScreenWatcher(lambda: hikou, lambda: next(in_front))
     watcher.card_hidden.connect(lambda: hidden.append(True))
-    for _ in range(4):
+    for _ in range(5):
         watcher.tick()
     assert hidden == [True]
 
@@ -137,3 +175,30 @@ def test_price_line(qapp):
     popup = RivenPopup(QRect(0, 0, 1920, 1080))
     popup.show_price(PriceCheck(20.0, 7, 150, 5, "2 of the same positive stats", ()))
     assert popup.price.text == "~20" and "5 listings" in popup.price_detail.text()
+
+
+def test_reading_the_same_riven_again_changes_nothing_on_screen(qapp, catalog):
+    reads = []
+    popup, assistant = _assistant(catalog, lambda f, c: (reads.append(1), RivenRead(DRAFT))[1], [])
+    assistant.card_shown(object())
+    _wait(qapp, lambda: popup.draft == DRAFT and "Nobody" in popup.price_detail.text())
+    shown_reading = []
+    popup.show_reading = lambda: shown_reading.append(True)
+    popup.show_read = lambda *a: shown_reading.append(True)
+    assistant.card_shown(object())
+    _wait(qapp, lambda: len(reads) == 2)
+    qapp.processEvents()
+    assert shown_reading == [] and popup.draft == DRAFT
+    assistant.shutdown()
+
+
+def test_a_failed_re_read_keeps_the_good_one(qapp, catalog):
+    results = iter([RivenRead(DRAFT), RivenRead(RivenDraft(), ["No riven card found."])])
+    popup, assistant = _assistant(catalog, lambda f, c: next(results), [])
+    assistant.card_shown(object())
+    _wait(qapp, lambda: popup.draft == DRAFT)
+    assistant.card_shown(object())
+    time.sleep(0.2)
+    qapp.processEvents()
+    assert popup.draft == DRAFT and popup.isVisible()
+    assistant.shutdown()

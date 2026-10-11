@@ -137,6 +137,9 @@ class RivenPopup(QWidget):
         weapon = catalog.by_weapon.get(draft.weapon)
         title = f"{weapon.name if weapon else draft.weapon} {draft.name[:1].upper()}{draft.name[1:]}".strip()
         self.body.addLayout(self._header(title or "Riven"))
+        legend = self._label("Bars: how well each stat rolled, within what this riven can roll", MUTED, 8)
+        legend.setWordWrap(True)
+        self.body.addWidget(legend)
         rolls = attr_rolls(catalog, weapon, draft.attrs, draft.rank) if weapon else [None] * len(draft.attrs)
         for attr, roll in zip(draft.attrs, rolls):
             g = grade(roll) if roll is not None and 0.85 <= roll <= 1.15 else None
@@ -147,9 +150,9 @@ class RivenPopup(QWidget):
             row.addWidget(GradeBar(g))
             self.body.addLayout(row)
         overall = riven_grade(catalog, weapon, draft.attrs, draft.rank) if weapon else None
-        meta = f"MR {draft.mr} · {draft.rolls} rolls · rank {draft.rank} · {draft.polarity.title()}"
         if overall is not None:
-            meta = f"Roll {overall}%  ·  " + meta
+            self.body.addWidget(self._label(f"Overall roll {overall}%  (0% = worst possible, 100% = best)", TEXT, 9))
+        meta = f"MR {draft.mr} · {draft.rolls} rolls · rank {draft.rank} · {draft.polarity.title()}"
         self.body.addWidget(self._label(meta, MUTED, 9))
         self.price.set_text("")
         self.price_detail.setText("Checking listings…")
@@ -260,7 +263,8 @@ class RivenAssistant(QObject):
     def card_shown(self, frame, _layout=None) -> None:
         self._generation += 1
         generation = self._generation
-        self.popup.show_reading()
+        if self.popup.draft is None or not self.popup.isVisible():
+            self.popup.show_reading()  # a re-read of a showing riven happens quietly behind it
 
         def work():
             catalog, _ = self.data()
@@ -272,13 +276,25 @@ class RivenAssistant(QObject):
         self._generation += 1  # results still on their way are dropped
         self.popup.hide()
 
+    def card_back(self) -> None:
+        """The same riven is showing again after a short gap: bring the popup back as it was."""
+        if self.popup.draft is not None:
+            self.popup.show()
+
     def _read_done(self, generation: int, catalog: RivenCatalog, read) -> None:
         if generation != self._generation:
             return
+        current = self.popup.draft
         if not read.ok:
+            if current is not None:  # keep the good read rather than flash "not read"
+                self.popup.show()
+                return
             self.popup.show_failed(" ".join(read.warnings) or "Could not read this riven.")
             return
         draft = read.draft
+        if current is not None and (draft.weapon, draft.name, draft.attrs) == (current.weapon, current.name, current.attrs):
+            self.popup.show()  # same riven read again: nothing on screen changes
+            return
         self.popup.show_read(catalog, draft, read.warnings)
         me = self.my_name()
 
