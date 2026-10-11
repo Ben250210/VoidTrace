@@ -56,16 +56,20 @@ QUIT
 
 
 def make_icon() -> Path:
+    """Multi-size .ico from the VoidTrace logo (Explorer, taskbar and Alt+Tab pick different sizes)."""
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PIL import Image
     from PyQt6.QtWidgets import QApplication
 
-    from voidtrace.icons import platinum_icon
+    from voidtrace.icons import voidtrace_logo
 
     app = QApplication.instance() or QApplication([])  # noqa: F841 (needed to paint)
     BUILD.mkdir(exist_ok=True)
+    png = BUILD / "logo-256.png"
+    if not voidtrace_logo(256).toImage().save(str(png), "PNG"):
+        raise SystemExit("could not render the logo")
     path = BUILD / "voidtrace.ico"
-    if not platinum_icon(256).toImage().save(str(path), "ICO"):
-        raise SystemExit("could not write the app icon")
+    Image.open(png).save(path, sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
     return path
 
 

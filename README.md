@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.png" width="128" alt="VoidTrace logo"></p>
+
 # VoidTrace
 
 Prices for Void relic rewards right on the reward screen, plus a Warframe.Market window to find

@@ -79,6 +79,77 @@ def ducat_icon(size: int, ratio: float = 1.0) -> QPixmap:
 
 
 @lru_cache(maxsize=16)
+def voidtrace_logo(size: int, ratio: float = 1.0) -> QPixmap:
+    """VoidTrace logo: a glowing void orb wrapped in swept wisps, after the game's Void Traces resource
+    (own drawing, not the game's artwork), on a dark round badge so it reads on light and dark
+    backgrounds. Small sizes drop the fine detail."""
+    px, p = _canvas(size, ratio)
+    s = float(size)
+    c = QPointF(s / 2, s / 2)
+    detailed = size >= 32
+
+    # Badge: deep void blue-violet, lighter toward the top left, with a faint cyan rim.
+    badge = QRadialGradient(QPointF(s * 0.38, s * 0.32), s * 0.7)
+    badge.setColorAt(0.0, QColor(36, 42, 92))
+    badge.setColorAt(0.6, QColor(16, 18, 46))
+    badge.setColorAt(1.0, QColor(8, 9, 24))
+    p.setBrush(QBrush(badge))
+    p.setPen(QPen(QColor(120, 200, 255, 150), max(1.0, s / 42)))
+    p.drawEllipse(c, s * 0.47, s * 0.47)
+
+    # Glow around the orb.
+    glow = QRadialGradient(c, s * 0.36)
+    glow.setColorAt(0.0, QColor(150, 220, 255, 170))
+    glow.setColorAt(0.5, QColor(80, 160, 255, 60))
+    glow.setColorAt(1.0, QColor(60, 120, 255, 0))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(glow))
+    p.drawEllipse(c, s * 0.36, s * 0.36)
+
+    # Wisps sweeping around the orb, rotationally symmetric.
+    def wisp(angle: float, alpha: int, reach: float) -> None:
+        p.save()
+        p.translate(c)
+        p.rotate(angle)
+        path = QPainterPath()
+        path.moveTo(-reach, s * 0.05)
+        path.cubicTo(-reach * 0.92, -reach * 0.78, reach * 0.30, -reach * 1.12, reach * 0.95, -reach * 0.50)
+        path.cubicTo(reach * 0.30, -reach * 0.80, -reach * 0.50, -reach * 0.62, -reach, s * 0.05)
+        grad = QLinearGradient(QPointF(-reach, 0), QPointF(reach * 0.95, -reach * 0.5))
+        grad.setColorAt(0.0, QColor(110, 190, 255, 0))
+        grad.setColorAt(0.45, QColor(150, 215, 255, alpha))
+        grad.setColorAt(1.0, QColor(240, 252, 255, min(255, alpha + 45)))
+        p.setBrush(QBrush(grad))
+        p.drawPath(path)
+        p.restore()
+
+    reach = s * 0.38
+    wisp(-20, 235, reach)
+    wisp(160, 235, reach)
+    if detailed:
+        wisp(70, 110, reach * 0.86)
+        wisp(250, 110, reach * 0.86)
+
+    # The orb: white-hot centre fading to blue at the rim.
+    orb_r = s * (0.15 if detailed else 0.17)
+    orb = QRadialGradient(QPointF(s * 0.47, s * 0.46), orb_r * 1.2)
+    orb.setColorAt(0.0, QColor(255, 255, 255))
+    orb.setColorAt(0.4, QColor(220, 243, 255))
+    orb.setColorAt(0.8, QColor(120, 190, 255))
+    orb.setColorAt(1.0, QColor(55, 110, 225))
+    p.setBrush(QBrush(orb))
+    p.drawEllipse(c, orb_r, orb_r)
+
+    # Sparks drifting off the wisps.
+    if detailed:
+        for x, y, r in ((0.79, 0.27, 0.020), (0.21, 0.74, 0.017), (0.70, 0.80, 0.013), (0.28, 0.22, 0.012)):
+            p.setBrush(QColor(225, 247, 255, 230))
+            p.drawEllipse(QPointF(s * x, s * y), s * r, s * r)
+    p.end()
+    return px
+
+
+@lru_cache(maxsize=16)
 def eye_icon(size: int, visible: bool, ratio: float = 1.0) -> QPixmap:
     """Order visibility: a green open eye when visible, a red eye with a slash when hidden."""
     px, p = _canvas(size, ratio)

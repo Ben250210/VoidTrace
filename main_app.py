@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 from voidtrace.cv_cleaner import TesseractNotFound, capture_screen, warframe_is_foreground
 from voidtrace.debug_log import DebugChannelBusy, DebugLogSource
 from voidtrace import app_support, hotkey
-from voidtrace.icons import platinum_icon
+from voidtrace.icons import voidtrace_logo
 from voidtrace.items import load_catalog, load_items
 from voidtrace.market_window import MarketWindow
 from voidtrace.sellers import SellerService
@@ -132,8 +132,16 @@ def make_line_source(kind: str, path: Path):
     return LogTailer(path, start_at_eof=True)
 
 
+def app_icon() -> QIcon:
+    """The VoidTrace logo at the sizes Windows asks for (tray, title bar, taskbar)."""
+    icon = QIcon()
+    for size in (16, 24, 32, 48, 64, 128, 256):
+        icon.addPixmap(voidtrace_logo(size))
+    return icon
+
+
 def make_tray(app: QApplication, open_market, game_log_status=lambda: None) -> QSystemTrayIcon:
-    tray = QSystemTrayIcon(QIcon(platinum_icon(32)), app)
+    tray = QSystemTrayIcon(app_icon(), app)
     tray.setToolTip("VoidTrace")
     menu = QMenu()
     menu.addAction("Open market (Ctrl+Shift+M)", open_market)
@@ -194,7 +202,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     app = QApplication(sys.argv[:1])
     app.setQuitOnLastWindowClosed(False)
-    app.setWindowIcon(QIcon(platinum_icon(64)))
+    app.setWindowIcon(app_icon())
     if args.self_test:
         return 0 if show_self_test() else 1
 
@@ -251,7 +259,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     tray = make_tray(app, open_market, game_log_status)
     tray.showMessage("VoidTrace is running",
                      "Prices appear on relic reward screens (Borderless Fullscreen). Ctrl+Shift+M opens the market.",
-                     QIcon(platinum_icon(64)), 7000)
+                     app_icon(), 7000)
     hotkey_filter = None if args.no_hotkey else hotkey.register(app, open_market)  # noqa: F841
 
     if args.demo is not None:
