@@ -217,6 +217,9 @@ def test_price_check_ignores_the_rolls_filter(qapp):
     window, client = _window()
     window.open_weapon("kulstar")
     window.find_panel.rolls.setCurrentIndex(window.find_panel.rolls.findData(rivens.ROLLED))
+    # Let the Find tab's own (filtered) search finish first, so only the price check is recorded.
+    _wait(qapp, lambda: any("re_rolls_min=1" in p for p in client.paths)
+          and window.find_panel.status.text().endswith("cheapest."))
     panel = window.price_panel
     panel.name.setText("critacan")
     panel.fill_from_name()
@@ -239,3 +242,18 @@ def test_name_change_resets_the_old_values(qapp):
     panel.name.setText("saticron")  # buff 1 becomes multishot: 120.5 was the crit chance value
     panel.fill_from_name()
     assert panel.rows[0].box.currentData() == "multishot" and panel.rows[0].value.value() == 0.0
+
+
+def test_grades_show_beside_each_value(qapp):
+    window, _ = _window()
+    window.open_weapon("kulstar")
+    panel = window.price_panel
+    panel.name.setText("critacan")
+    panel.fill_from_name()
+    cc = rivens.expected_value(window.catalog, window.catalog.by_weapon["kulstar"], "critical_chance", True, 2, False, 0)
+    panel.rows[0].value.setValue(round(cc * 1.1, 2))   # the best possible crit chance roll
+    panel.rows[1].value.setValue(500.0)                # impossible multishot: flagged, not graded
+    assert panel.rows[0].grade.text() in ("99%", "100%")
+    assert panel.rows[1].grade.text() == "?"
+    assert panel.table.horizontalHeaderItem(6).text() == "Grade"
+    window.shutdown()

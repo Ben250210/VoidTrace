@@ -48,8 +48,11 @@ from .rivens import (
     RivenWeapon,
     CLEAN,
     ROLLED,
+    attr_rolls,
     buffs_from_name,
+    grade,
     price_check,
+    riven_grade,
     riven_whisper,
     valid_names,
 )
@@ -64,7 +67,7 @@ STATUS_LABEL = {"ingame": "In game", "online": "Online", "offline": "Offline"}
 STATUS_COLOR = {"ingame": QColor(124, 201, 156), "online": QColor(143, 163, 255), "offline": QColor(155, 160, 181)}
 # Rank matters: sellers list stat values at the riven's current rank (a rank-0 riven shows about a
 # ninth of its maxed values).
-AUCTION_COLUMNS = ["Riven", "Buffs", "Curse", "MR", "Rank", "Rolls", "Price", "Seller"]
+AUCTION_COLUMNS = ["Riven", "Buffs", "Curse", "MR", "Rank", "Rolls", "Grade", "Price", "Seller"]
 PRICE_COLUMN = AUCTION_COLUMNS.index("Price")
 MAX_BUFFS = 3
 
@@ -94,6 +97,14 @@ def auction_table() -> QTableWidget:
     return table
 
 
+def grade_color(value: Optional[int]) -> Optional[QColor]:
+    """Red (0) through amber to green (100), like the bars other riven tools draw."""
+    if value is None:
+        return None
+    t = value / 100
+    return QColor(int(240 - 116 * t), int(110 + 91 * t), int(90 + 66 * t))
+
+
 def fill_auction_table(table: QTableWidget, catalog: RivenCatalog, auctions: list[RivenAuction]) -> None:
     table.setRowCount(0)
     table.setRowCount(len(auctions))
@@ -102,6 +113,7 @@ def fill_auction_table(table: QTableWidget, catalog: RivenCatalog, auctions: lis
         buffs = "\n".join(catalog.format_attr(x) for x in a.attrs if x.positive)
         curse = "\n".join(catalog.format_attr(x) for x in a.attrs if not x.positive) or "none"
         price = "bids only" if a.price is None else (str(a.price) if a.buyout is not None else f"{a.price} (bid)")
+        g = riven_grade(catalog, catalog.by_weapon.get(a.weapon), a.attrs, a.rank)
         cells = [
             _cell(catalog.riven_title(a)),
             _cell(buffs, color=BUFF_COLOR),
@@ -110,6 +122,7 @@ def fill_auction_table(table: QTableWidget, catalog: RivenCatalog, auctions: lis
             _cell(str(a.rank), right=True),
             _cell("0 \u00b7 clean" if a.rolls == 0 else str(a.rolls), right=True,
                   color=CLEAN_COLOR if a.rolls == 0 else None),
+            _cell("" if g is None else f"{g}%", right=True, color=grade_color(g)),
             _cell(price, right=True, icon=plat),
             _cell(f"{a.seller} · {STATUS_LABEL.get(a.status, a.status)}", color=STATUS_COLOR.get(a.status)),
         ]
@@ -251,6 +264,8 @@ class StatRow:
         self.value = QDoubleSpinBox(minimum=-1000.0, maximum=1000.0, decimals=2)
         self.value.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
         self.value.setMinimumWidth(80)
+        self.grade = QLabel()  # how well this stat rolled, e.g. "92%"
+        self.grade.setMinimumWidth(48)
 
     def attr(self) -> Optional[RivenAttr]:
         slug = self.box.currentData()
@@ -300,6 +315,7 @@ class PricePanel(QWidget):
             form.addWidget(QLabel("Curse" if row.curse else f"Buff {i + 1}"), 2 + i, 0)
             form.addWidget(row.box, 2 + i, 1, 1, 2)
             form.addWidget(row.value, 2 + i, 3)
+            form.addWidget(row.grade, 2 + i, 4)
         extras = QHBoxLayout()
         for label, widget in (("MR", self.mr), ("Rolls", self.rolls), ("Rank", self.rank), ("Polarity", self.polarity)):
             extras.addWidget(QLabel(label))
@@ -323,6 +339,39 @@ class PricePanel(QWidget):
         self.name.textEdited.connect(self.fill_from_name)
         for row in self.rows[:MAX_BUFFS]:
             row.box.currentIndexChanged.connect(lambda _: self.check_name())
+        for row in self.rows:
+            row.box.currentIndexChanged.connect(lambda _: self.update_grades())
+            row.value.valueChanged.connect(lambda _: self.update_grades())
+        self.rank.valueChanged.connect(lambda _: self.update_grades())
+
+    def my_grade(self) -> Optional[int]:
+        weapon = self.window_.weapon
+        draft = self.draft()
+        return riven_grade(self.window_.catalog, weapon, draft.attrs, draft.rank) if weapon else None
+
+    def update_grades(self) -> None:
+        """Show how far up its random range each stat rolled (0% worst, 100% best)."""
+        weapon = self.window_.weapon
+        draft = self.draft()
+        rolls = attr_rolls(self.window_.catalog, weapon, draft.attrs, draft.rank) if weapon else []
+        by_slug = {a.slug: r for a, r in zip(draft.attrs, rolls)}
+        for row in self.rows:
+            slug = row.box.currentData()
+            roll = by_slug.get(slug) if slug else None
+            if roll is None or row.value.value() == 0:
+                row.grade.setText("")
+            elif not 0.85 <= roll <= 1.15:
+                row.grade.setText("?")  # outside what this riven can roll: a typo, or the wrong rank
+                row.grade.setToolTip("This value is outside the range this stat can roll at this rank.")
+                row.grade.setStyleSheet("color: #e6b450;")
+            else:
+                g = grade(roll)
+                if row.curse:
+                    g = 100 - g  # a smaller curse is the better roll
+                row.grade.setText(f"{g}%")
+                row.grade.setToolTip("How well this stat rolled: 0% is the lowest possible, 100% the highest.")
+                color = grade_color(g)
+                row.grade.setStyleSheet(f"color: {color.name()};")
 
     # --- the name and the buffs must agree -------------------------------------------------
 
@@ -383,13 +432,13 @@ class PricePanel(QWidget):
     def draft(self) -> RivenDraft:
         weapon = self.window_.weapon
         attrs = tuple(a for a in (row.attr() for row in self.rows) if a is not None)
-        return RivenDraft(weapon=weapon.slug if weapon else "", name=self.name.text().strip(), attrs=attrs,
+        return RivenDraft(weapon=weapon.slug if weapon else "", name=self.name.text().strip().lower(), attrs=attrs,
                           mr=self.mr.value(), rolls=self.rolls.value(), rank=self.rank.value(),
                           polarity=self.polarity.currentData())
 
     def load_draft(self, draft: RivenDraft) -> None:
         """Fill the form, e.g. from a riven read off the screen."""
-        self.name.setText(draft.name)
+        self.name.setText(draft.name[:1].upper() + draft.name[1:])  # as the game writes it: "Sati-visicon"
         buffs = [a for a in draft.attrs if a.positive][:MAX_BUFFS]
         curse = [a for a in draft.attrs if not a.positive][:1]
         for row, attr in zip(self.rows, [*buffs, *[None] * (MAX_BUFFS - len(buffs)), *(curse or [None])]):
@@ -408,15 +457,18 @@ class PricePanel(QWidget):
             self.detail.setText("Search for the riven's weapon first.")
             return
         draft = self.draft()
+        mine = self.my_grade()
         self._request += 1
         request = self._request
         me = self.window_.account.ingame_name if self.window_.account.signed_in else None
+        catalog = self.window_.catalog
         self.result.setText("")
         self.detail.setText("Checking listings…")
 
         def work() -> PriceCheck:
             auctions = self.window_.service.search(weapon.slug)
-            return price_check(auctions, draft.positives, draft.negative, exclude_seller=me)
+            return price_check(auctions, draft.positives, draft.negative, exclude_seller=me,
+                               catalog=catalog, my_grade=mine)
 
         self.window_.run_async(work, lambda check: self._show(request, check),
                                lambda exc: self._failed(request, exc))
@@ -435,13 +487,17 @@ class PricePanel(QWidget):
             self.result.setText("No listings to compare")
             self.detail.setText("Nobody is selling a riven for this weapon right now.")
             return
-        self.result.setText(f"About {check.estimate:g} platinum")
+        mine = self.my_grade()
+        self.result.setText(f"About {check.estimate:g} platinum" +
+                            (f'  <span style="color:#9ba0b5; font-size:13px; font-weight:400">your roll: {mine}%</span>'
+                             if mine is not None else ""))
         extra = f" {len(check.outliers)} extreme price(s) left out." if check.outliers else ""
         if check.exact and check.tier not in ("same stats and curse", "same stats, no curse", "same positive stats"):
             prices = ", ".join(f"{a.price}p" for a in check.exact[:5])
             extra += f" Only {len(check.exact)} with exactly your positive stats: {prices}."
+        similar = " that rolled about as well as yours" if check.similar_rolls else ""
         self.detail.setText(
-            f"Median of the cheapest {min(check.count, 5)} of {check.count} listings with {check.tier} "
+            f"Median of the cheapest {min(check.count, 5)} of {check.count} listings with {check.tier}{similar} "
             f"(range {check.low}-{check.high}p). Rivens have no trade history: these are asking prices.{extra}")
 
 

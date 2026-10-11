@@ -487,6 +487,7 @@ class PriceCheck:
     comparables: tuple[RivenAuction, ...]
     outliers: tuple[int, ...] = ()
     exact: tuple[RivenAuction, ...] = ()  # same positive stats, whatever the curse: shown even when too few
+    similar_rolls: bool = False           # priced only from listings that rolled about as well
 
 
 def comparable_tiers(positives: Sequence[str], negative: Optional[str]) -> list[tuple[str, callable]]:
@@ -506,13 +507,21 @@ def comparable_tiers(positives: Sequence[str], negative: Optional[str]) -> list[
     return tiers
 
 
+SIMILAR_GRADE = 20  # listings within this many grade points count as "rolled about as well"
+
+
 def price_check(auctions: Sequence[RivenAuction], positives: Sequence[str], negative: Optional[str] = None,
-                exclude_seller: Optional[str] = None, min_count: int = MIN_COMPARABLES) -> PriceCheck:
+                exclude_seller: Optional[str] = None, min_count: int = MIN_COMPARABLES,
+                catalog: Optional[RivenCatalog] = None, my_grade: Optional[int] = None) -> PriceCheck:
     """Estimate a riven's price from listings of the same weapon with the same stats.
 
     Riven prices are asking prices (rivens trade in person, there is no trade history), so the
     estimate is the median of the cheapest few after removing outliers: what you would have to beat
     to sell soon. Falls back to looser matches when too few listings are that alike.
+
+    With `my_grade` (and the catalog to grade listings with), the chosen listings are narrowed to
+    those that rolled about as well, when there are enough of them: a 90% riven is not priced
+    against 20% ones with the same stats.
     """
     me = (exclude_seller or "").casefold()
     pool = [a for a in auctions if a.price is not None and (not me or a.seller.casefold() != me)]
@@ -528,6 +537,14 @@ def price_check(auctions: Sequence[RivenAuction], positives: Sequence[str], nega
     exact = tuple(sorted((a for a in pool if pos and a.positives == pos), key=lambda a: a.price))
     if not chosen:
         return PriceCheck(None, None, None, 0, tier, (), exact=exact)
+    similar_rolls = False
+    if my_grade is not None and catalog is not None:
+        def listing_grade(a: RivenAuction) -> Optional[int]:
+            return riven_grade(catalog, catalog.by_weapon.get(a.weapon), a.attrs, a.rank)
+
+        similar = [a for a in chosen if (g := listing_grade(a)) is not None and abs(g - my_grade) <= SIMILAR_GRADE]
+        if len(similar) >= min_count:
+            chosen, similar_rolls = similar, True
     kept, outliers = iqr_filter([a.price for a in chosen])
     kept_ids = list(kept)
     comparables = []
@@ -537,4 +554,4 @@ def price_check(auctions: Sequence[RivenAuction], positives: Sequence[str], nega
             comparables.append(a)
     estimate = float(np.median(kept[:CHEAPEST_K])) if kept else None
     return PriceCheck(estimate, int(kept[0]) if kept else None, int(kept[-1]) if kept else None,
-                      len(kept), tier, tuple(comparables), tuple(int(o) for o in outliers), exact)
+                      len(kept), tier, tuple(comparables), tuple(int(o) for o in outliers), exact, similar_rolls)

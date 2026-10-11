@@ -243,3 +243,35 @@ def test_maxed_values_listed_at_rank_0_are_graded_as_rank_8(catalog):
 def test_melee_stats_with_their_own_game_tags_have_bases(catalog):
     balla = catalog.by_weapon["balla"]  # zaw: "Melee Damage" has its own tag in the game data
     assert rivens.stat_base(catalog, balla, "base_damage_/_melee_damage") is not None
+
+
+def _hikou_listing(catalog, roll, price, seller="Seller"):
+    """A Hikou Igni-insitron listing whose buffs all rolled `roll` (0.9-1.1)."""
+    hikou = catalog.by_weapon["hikou"]
+    stats = [("puncture_damage", True), ("heat_damage", True), ("damage_vs_corpus", True), ("status_duration", False)]
+    attrs = []
+    for slug, positive in stats:
+        value = rivens.expected_value(catalog, hikou, slug, positive, 3, True, 0) * (roll if positive else 1.0)
+        if catalog.by_stat[slug].unit == "multiply":
+            value += 1
+        attrs.append(RivenAttr(slug, round(value, 2), positive))
+    return RivenAuction(id=f"{seller}{price}", weapon="hikou", name="igni-insitron", attrs=tuple(attrs), mr=10,
+                        rolls=0, rank=0, polarity="vazarin", buyout=price, starting=price, top_bid=None,
+                        direct=True, seller=seller, status="ingame", reputation=0)
+
+
+def test_price_check_compares_against_rivens_that_rolled_as_well(catalog):
+    weak = [_hikou_listing(catalog, 0.91, p) for p in (10, 12, 14, 15)]
+    strong = [_hikou_listing(catalog, 1.09, p) for p in (60, 70, 80, 90)]
+    positives = ["puncture_damage", "heat_damage", "damage_vs_corpus"]
+    plain = price_check(weak + strong, positives, "status_duration")
+    graded = price_check(weak + strong, positives, "status_duration", catalog=catalog, my_grade=92)
+    assert not plain.similar_rolls and plain.estimate < 60
+    assert graded.similar_rolls and graded.estimate == 75 and graded.low == 60
+
+
+def test_price_check_keeps_all_listings_when_too_few_rolled_alike(catalog):
+    listings = [_hikou_listing(catalog, 0.91, p) for p in (10, 12, 14, 15)] + [_hikou_listing(catalog, 1.09, 80)]
+    check = price_check(listings, ["puncture_damage", "heat_damage", "damage_vs_corpus"], "status_duration",
+                        catalog=catalog, my_grade=92)
+    assert not check.similar_rolls and check.estimate == 13  # one strong listing is too few to price from
