@@ -78,6 +78,31 @@ def ducat_icon(size: int, ratio: float = 1.0) -> QPixmap:
     return px
 
 
+@lru_cache(maxsize=16)
+def eye_icon(size: int, visible: bool, ratio: float = 1.0) -> QPixmap:
+    """Order visibility: a green open eye when visible, a red eye with a slash when hidden."""
+    px, p = _canvas(size, ratio)
+    s = float(size)
+    color = QColor(124, 201, 156) if visible else QColor(240, 110, 90)
+    pen = QPen(color, max(1.4, s / 10))
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    almond = QPainterPath()
+    almond.moveTo(s * 0.06, s * 0.5)
+    almond.quadTo(s * 0.5, s * 0.08, s * 0.94, s * 0.5)
+    almond.quadTo(s * 0.5, s * 0.92, s * 0.06, s * 0.5)
+    p.drawPath(almond)
+    p.setBrush(color)
+    p.drawEllipse(QPointF(s / 2, s / 2), s * 0.15, s * 0.15)
+    if not visible:
+        p.setPen(QPen(QColor(15, 17, 25), max(3.0, s / 5)))  # gap so the slash reads clearly
+        p.drawLine(QPointF(s * 0.16, s * 0.84), QPointF(s * 0.84, s * 0.16))
+        p.setPen(pen)
+        p.drawLine(QPointF(s * 0.16, s * 0.84), QPointF(s * 0.84, s * 0.16))
+    p.end()
+    return px
+
+
 def draw_amount(painter: QPainter, rect: QRect, icon: QPixmap, text: str, font: QFont, color: QColor,
                 align: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignHCenter) -> None:
     """Draw `icon` + `text` as one unit inside `rect`, vertically centred."""

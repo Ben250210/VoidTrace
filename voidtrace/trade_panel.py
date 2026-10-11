@@ -35,7 +35,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .account import Account, MarketError, MyOrder, NotSignedIn, TopOrder, suggested_price, top_orders
-from .icons import platinum_icon
+from .icons import eye_icon, platinum_icon
 
 if TYPE_CHECKING:
     from .market_window import MarketWindow
@@ -45,7 +45,10 @@ QPushButton { background: #2a2f45; border: 1px solid #3a4160; border-radius: 4px
 QPushButton:hover { background: #343a55; }
 QPushButton#primary { background: #d9b45c; color: #14161f; border: none; font-weight: 600; }
 QPushButton#primary:hover { background: #e6c472; }
-QPushButton#danger { color: #f08a6e; }
+QPushButton#danger { color: #f08a6e; padding: 3px 10px; }
+QPushButton#small { padding: 3px 10px; }
+QToolButton#eye { background: transparent; border: none; padding: 2px; }
+QToolButton#eye:hover { background: #1d2131; border-radius: 4px; }
 QSpinBox { background: #171a26; border: 1px solid #2a2f45; border-radius: 4px; padding: 4px 6px; }
 QToolButton#step { background: #2a2f45; border: 1px solid #3a4160; border-radius: 4px; font-weight: 700;
                    min-width: 26px; min-height: 24px; }
@@ -353,19 +356,37 @@ class PostOrderPanel(QWidget):
 
 
 class MyOrdersPanel(QWidget):
-    COLUMNS = ["Item", "Type", "Rank", "Price", "Qty", "", ""]
+    COLUMNS = ["", "Item", "Type", "Rank", "Price", "Qty", "", ""]
+    EYE, ITEM, TYPE, RANK, PRICE, QTY, MATCH, DELETE = range(8)
 
     def __init__(self, window: "MarketWindow") -> None:
         super().__init__()
         self.window_ = window
         self.orders: list[MyOrder] = []
+        self.shown: list[MyOrder] = []
         self.setStyleSheet(BUTTON_STYLE)
         self.table = _table(self.COLUMNS)
-        self.table.horizontalHeaderItem(3).setIcon(QIcon(platinum_icon(14)))
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(self.EYE, QHeaderView.ResizeMode.Fixed)
+        header.setSectionResizeMode(self.ITEM, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeaderItem(self.PRICE).setIcon(QIcon(platinum_icon(14)))
+        self.table.horizontalHeaderItem(self.EYE).setIcon(QIcon(eye_icon(14, True)))
         self.status = QLabel(objectName="muted")
+        self.state_filter = QComboBox()
+        for label, value in (("All orders", None), ("Visible", True), ("Hidden", False)):
+            self.state_filter.addItem(label, value)
+        self.type_filter = QComboBox()
+        for label, value in (("Sell and buy", None), ("Sell", "sell"), ("Buy", "buy")):
+            self.type_filter.addItem(label, value)
+        for box in (self.state_filter, self.type_filter):
+            box.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+            box.currentIndexChanged.connect(lambda _: self._render())
         self.reload = QPushButton("Refresh")
+        self.reload.setCursor(Qt.CursorShape.PointingHandCursor)
         top = QHBoxLayout()
         top.addWidget(self.status, 1)
+        top.addWidget(self.state_filter)
+        top.addWidget(self.type_filter)
         top.addWidget(self.reload)
         layout = QVBoxLayout(self)
         layout.addLayout(top)
@@ -374,10 +395,11 @@ class MyOrdersPanel(QWidget):
 
     def refresh(self) -> None:
         if not self.window_.account.signed_in:
-            self.table.setRowCount(0)
+            self.orders = []
+            self._render()
             self.status.setText("Sign in to see your orders.")
             return
-        self.status.setText("Loading your orders…")
+        self.status.setText("Loading your orders\u2026")
         self.window_.run_async(self.window_.account.my_orders, self._show, self._failed)
 
     def _failed(self, exc: Exception) -> None:
@@ -388,23 +410,74 @@ class MyOrdersPanel(QWidget):
 
     def _show(self, orders: list) -> None:
         self.orders = orders
-        self.table.setRowCount(len(orders))
-        for r, o in enumerate(orders):
+        self._render()
+
+    def filtered(self) -> list[MyOrder]:
+        state, kind = self.state_filter.currentData(), self.type_filter.currentData()
+        return [o for o in self.orders
+                if (state is None or o.visible == state) and (kind is None or o.type == kind)]
+
+    def _small_button(self, text: str, name: str = "small") -> QPushButton:
+        b = QPushButton(text, objectName=name)
+        b.setCursor(Qt.CursorShape.PointingHandCursor)
+        return b
+
+    def _render(self) -> None:
+        self.shown = self.filtered()
+        self.table.setRowCount(len(self.shown))
+        widths = {self.MATCH: 0, self.DELETE: 0}
+        row_h = 0
+        for r, o in enumerate(self.shown):
             item = self.window_.by_id.get(o.item_id)
-            name = item.name if item else o.item_id
-            self.table.setItem(r, 0, _cell(name + ("" if o.visible else "  (hidden)")))
-            self.table.setItem(r, 1, _cell(o.type.capitalize(),
-                                           color=QColor(124, 201, 156) if o.type == "sell" else QColor(143, 163, 255)))
-            self.table.setItem(r, 2, _cell("" if o.rank is None else str(o.rank), right=True))
-            self.table.setItem(r, 3, _cell(str(o.platinum), right=True, icon=platinum_icon(14)))
-            self.table.setItem(r, 4, _cell(str(o.quantity), right=True))
-            match = QPushButton("Match lowest" if o.type == "sell" else "Match highest")
+            eye = QToolButton(objectName="eye")
+            eye.setIcon(QIcon(eye_icon(18, o.visible)))
+            eye.setIconSize(QSize(18, 18))
+            eye.setCursor(Qt.CursorShape.PointingHandCursor)
+            eye.setToolTip("Visible on Warframe.Market. Click to hide." if o.visible else
+                           "Hidden from Warframe.Market. Click to show.")
+            eye.clicked.connect(lambda _=False, order=o: self.toggle_visible(order))
+            self.table.setCellWidget(r, self.EYE, eye)
+            self.table.setItem(r, self.ITEM, _cell(item.name if item else o.item_id,
+                                                   color=None if o.visible else QColor(155, 160, 181)))
+            self.table.setItem(r, self.TYPE, _cell(o.type.capitalize(),
+                                                   color=QColor(124, 201, 156) if o.type == "sell" else QColor(143, 163, 255)))
+            self.table.setItem(r, self.RANK, _cell("" if o.rank is None else str(o.rank), right=True))
+            self.table.setItem(r, self.PRICE, _cell(str(o.platinum), right=True, icon=platinum_icon(14)))
+            self.table.setItem(r, self.QTY, _cell(str(o.quantity), right=True))
+            match = self._small_button("Match lowest" if o.type == "sell" else "Match highest")
             match.clicked.connect(lambda _=False, order=o: self.reprice(order))
-            delete = QPushButton("Delete", objectName="danger")
+            delete = self._small_button("Delete", "danger")
             delete.clicked.connect(lambda _=False, order=o: self.delete(order))
-            self.table.setCellWidget(r, 5, match)
-            self.table.setCellWidget(r, 6, delete)
-        self.status.setText(f"{len(orders)} orders" if orders else "You have no orders.")
+            self.table.setCellWidget(r, self.MATCH, match)
+            self.table.setCellWidget(r, self.DELETE, delete)
+            for col, button in ((self.MATCH, match), (self.DELETE, delete)):
+                widths[col] = max(widths[col], button.sizeHint().width())
+            row_h = max(row_h, match.sizeHint().height(), eye.sizeHint().height())
+        # Size columns and rows to the buttons: the table only measures cell text, so buttons
+        # placed in cells were clipped ("Match lowes", "Delet").
+        header = self.table.horizontalHeader()
+        for col, width in widths.items():
+            if width:
+                header.setSectionResizeMode(col, QHeaderView.ResizeMode.Fixed)
+                self.table.setColumnWidth(col, width + 12)
+        self.table.setColumnWidth(self.EYE, 40)
+        if row_h:
+            self.table.verticalHeader().setDefaultSectionSize(row_h + 10)
+        hidden = sum(not o.visible for o in self.orders)
+        total = f"{len(self.orders)} orders" + (f", {hidden} hidden" if hidden else "")
+        if not self.orders:
+            self.status.setText("You have no orders." if self.window_.account.signed_in else self.status.text())
+        elif len(self.shown) != len(self.orders):
+            self.status.setText(f"Showing {len(self.shown)} of {total}")
+        else:
+            self.status.setText(total)
+
+    def toggle_visible(self, order: MyOrder) -> None:
+        item = self.window_.by_id.get(order.item_id)
+        name = item.name if item else "order"
+        self.status.setText(f"{'Hiding' if order.visible else 'Showing'} {name}\u2026")
+        self.window_.run_async(lambda: self.window_.account.update_order(order.id, visible=not order.visible),
+                               lambda _: self.refresh(), self._failed)
 
     def reprice(self, order: MyOrder) -> None:
         item = self.window_.by_id.get(order.item_id)

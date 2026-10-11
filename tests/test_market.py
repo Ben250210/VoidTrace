@@ -322,7 +322,7 @@ def test_my_orders_lists_and_deletes(qapp):
     panel = window.orders_panel
     panel.refresh()
     _wait(qapp, lambda: panel.table.rowCount() == 1)
-    assert panel.table.item(0, 0).text() == "Necramech Fury"
+    assert panel.table.item(0, panel.ITEM).text() == "Necramech Fury"
     panel.delete(panel.orders[0])
     _wait(qapp, lambda: http.orders == [] and panel.table.rowCount() == 0)
     window.shutdown()
@@ -353,4 +353,41 @@ def test_post_rank_box_fits_maxed_rank(qapp):
     assert box.currentText() == "Maxed rank"
     width = box.fontMetrics().horizontalAdvance("Maxed rank")
     assert box.sizeHint().width() > width and box.view().minimumWidth() >= width
+    window.shutdown()
+
+
+def test_my_orders_eye_filters_and_toggle(qapp):
+    window, http = _signed_in_window(qapp, {"sell": [], "buy": []})
+    acc = window.account
+    acc.create_order("5f4ed3f9d5c36d0086f55b0a", "sell", 12, rank=3)
+    acc.create_order("5f4ed3f9d5c36d0086f55b0a", "buy", 5, rank=3, visible=False)
+    panel = window.orders_panel
+    panel.refresh()
+    _wait(qapp, lambda: panel.table.rowCount() == 2)
+    assert "(hidden)" not in panel.table.item(1, panel.ITEM).text()      # eye icon instead of text
+    assert "Click to show" in panel.table.cellWidget(1, panel.EYE).toolTip()
+    assert panel.status.text() == "2 orders, 1 hidden"
+
+    panel.state_filter.setCurrentIndex(2)                                  # Hidden only
+    assert [o.type for o in panel.shown] == ["buy"] and "Showing 1 of 2" in panel.status.text()
+    panel.state_filter.setCurrentIndex(0)
+    panel.type_filter.setCurrentIndex(1)                                   # Sell only
+    assert [o.type for o in panel.shown] == ["sell"]
+    panel.type_filter.setCurrentIndex(0)
+
+    panel.table.cellWidget(0, panel.EYE).click()                           # hide the sell order
+    _wait(qapp, lambda: http.orders[0]["visible"] is False and not panel.orders[0].visible)
+    window.shutdown()
+
+
+def test_order_buttons_fit_their_columns(qapp):
+    window, http = _signed_in_window(qapp, {"sell": [], "buy": []})
+    window.account.create_order("5f4ed3f9d5c36d0086f55b0a", "sell", 12, rank=3)
+    panel = window.orders_panel
+    panel.refresh()
+    _wait(qapp, lambda: panel.table.rowCount() == 1)
+    for col in (panel.MATCH, panel.DELETE):
+        button = panel.table.cellWidget(0, col)
+        assert panel.table.columnWidth(col) >= button.sizeHint().width()
+        assert panel.table.rowHeight(0) >= button.sizeHint().height()
     window.shutdown()
