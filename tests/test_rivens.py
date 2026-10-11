@@ -187,3 +187,21 @@ def test_price_check_still_lists_the_few_exact_matches():
     check = price_check(pool, ["critical_chance", "multishot"], "zoom")
     assert check.tier == "1 of the same positive stats"
     assert [a.price for a in check.exact] == [400]
+
+
+def test_buffs_from_name(catalog):
+    nikana = catalog.by_weapon["nikana"]
+    assert rivens.buffs_from_name(catalog, "Critacan") == [["critical_chance"], ["multishot"]]
+    assert rivens.buffs_from_name(catalog, "critacron") == [["critical_chance"]]
+    assert rivens.buffs_from_name(catalog, "sci-critaata") == [["slash_damage"], ["critical_chance"],
+                                                               ["base_damage_/_melee_damage"]]
+    assert rivens.buffs_from_name(catalog, "nonsense") is None
+    # Laci + Nus is shared by several melee stats: all candidates are offered.
+    assert len(rivens.buffs_from_name(catalog, "lacinus", nikana)[0]) > 1
+
+
+def test_buffs_from_name_round_trips_valid_names(catalog):
+    for positives in (["critical_chance", "multishot"], ["heat_damage", "puncture_damage", "damage_vs_corpus"]):
+        for name in rivens.valid_names(catalog, positives):
+            slots = rivens.buffs_from_name(catalog, name)
+            assert sorted(s[0] for s in slots) == sorted(positives), name

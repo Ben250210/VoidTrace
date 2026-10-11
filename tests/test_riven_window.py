@@ -6,6 +6,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
 from voidtrace import rivens
@@ -140,3 +141,37 @@ def test_curse_typed_as_plain_number_becomes_negative_except_recoil(qapp):
     curse.box.setCurrentIndex(curse.box.findData("recoil"))
     assert curse.attr() == RivenAttr("recoil", 30.0, False)
     window.shutdown()
+
+
+def test_typing_the_name_fills_in_the_buffs(qapp):
+    window, _ = _window()
+    window.open_weapon("kulstar")
+    panel = window.price_panel
+    panel.name.setText("Saticron")
+    panel.fill_from_name()
+    assert [row.box.currentData() for row in panel.rows[:3]] == ["multishot", "critical_chance", None]
+    assert "filled in from the name" in panel.name_note.text()
+
+
+def test_a_name_that_does_not_fit_the_buffs_is_flagged(qapp):
+    window, _ = _window()
+    window.open_weapon("kulstar")
+    panel = window.price_panel
+    panel.name.setText("critacan")
+    panel.fill_from_name()
+    panel.rows[0].box.setCurrentIndex(panel.rows[0].box.findData("toxin_damage"))
+    assert "does not match" in panel.name_note.text()
+
+
+def test_mouse_wheel_does_not_change_an_unclicked_dropdown(qapp):
+    from PyQt6.QtCore import QPoint, QPointF
+    from PyQt6.QtGui import QWheelEvent
+
+    window, _ = _window()
+    window.open_weapon("kulstar")
+    box = window.price_panel.rows[0].box
+    box.setCurrentIndex(box.findData("puncture_damage"))
+    wheel = QWheelEvent(QPointF(5, 5), QPointF(5, 5), QPoint(0, 0), QPoint(0, -120), Qt.MouseButton.NoButton,
+                        Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
+    QApplication.sendEvent(box, wheel)
+    assert box.currentData() == "puncture_damage"

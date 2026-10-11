@@ -14,9 +14,10 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtWidgets import (
+    QAbstractSpinBox,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -46,8 +47,10 @@ from .rivens import (
     RivenDraft,
     RivenService,
     RivenWeapon,
+    buffs_from_name,
     price_check,
     riven_whisper,
+    valid_names,
 )
 from .trade_panel import BUTTON_STYLE, Stepper, _cell, _table
 
@@ -64,6 +67,28 @@ PRICE_COLUMN = AUCTION_COLUMNS.index("Price")
 MAX_BUFFS = 3
 
 ANY_CURSE, NO_CURSE, HAS_CURSE = None, "none", "has"
+
+
+class WheelGuard(QObject):
+    """Dropdowns and number boxes ignore the mouse wheel until clicked.
+
+    Qt changes a hovered dropdown on every wheel notch, so scrolling the window over the price
+    check silently turned Puncture into the next stat in the list, Radiation.
+    """
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802 (Qt naming)
+        if event.type() == QEvent.Type.Wheel and not obj.hasFocus():
+            event.ignore()  # lets the window scroll instead
+            return True
+        return False
+
+
+def guard_wheel(root: QWidget) -> WheelGuard:
+    guard = WheelGuard(root)
+    for widget in root.findChildren((QComboBox, QAbstractSpinBox)):
+        widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        widget.installEventFilter(guard)
+    return guard
 
 
 def disposition_dots(disposition: float) -> str:
@@ -259,7 +284,10 @@ class PricePanel(QWidget):
         self.window_ = window
         self.check: Optional[PriceCheck] = None
         self._request = 0
-        self.name = QLineEdit(placeholderText="Riven name, e.g. Crita-acritis")
+        self.name = QLineEdit(placeholderText="Riven name, e.g. Igni-insitron: the buffs fill in from it")
+        self.name_note = QLabel()
+        self.name_note.setWordWrap(True)
+        self.name_note.hide()
         self.rows = [StatRow(False, window.catalog) for _ in range(MAX_BUFFS)] + [StatRow(True, window.catalog)]
         self.mr = Stepper(8, 16, 8)
         self.rolls = Stepper(0, 9999, 0)
@@ -279,10 +307,11 @@ class PricePanel(QWidget):
         form = QGridLayout()
         form.addWidget(QLabel("Name"), 0, 0)
         form.addWidget(self.name, 0, 1, 1, 3)
+        form.addWidget(self.name_note, 1, 1, 1, 3)
         for i, row in enumerate(self.rows):
-            form.addWidget(QLabel("Curse" if row.curse else f"Buff {i + 1}"), 1 + i, 0)
-            form.addWidget(row.box, 1 + i, 1, 1, 2)
-            form.addWidget(row.value, 1 + i, 3)
+            form.addWidget(QLabel("Curse" if row.curse else f"Buff {i + 1}"), 2 + i, 0)
+            form.addWidget(row.box, 2 + i, 1, 1, 2)
+            form.addWidget(row.value, 2 + i, 3)
         extras = QHBoxLayout()
         for label, widget in (("MR", self.mr), ("Rolls", self.rolls), ("Rank", self.rank), ("Polarity", self.polarity)):
             extras.addWidget(QLabel(label))
@@ -303,6 +332,52 @@ class PricePanel(QWidget):
 
         self.check_button.clicked.connect(self.run_check)
         self.sell_button.clicked.connect(lambda: self.sell_requested.emit(self.draft(), self.check))
+        self.name.textEdited.connect(self.fill_from_name)
+        for row in self.rows[:MAX_BUFFS]:
+            row.box.currentIndexChanged.connect(lambda _: self.check_name())
+
+    # --- the name and the buffs must agree -------------------------------------------------
+
+    def _note(self, text: str, warn: bool = False) -> None:
+        self.name_note.setStyleSheet("color: #e6b450;" if warn else "color: #9ba0b5;")
+        self.name_note.setText(text)
+        self.name_note.setVisible(bool(text))
+
+    def fill_from_name(self, text: str = "") -> None:
+        """Pick the buffs the typed name stands for; values and the curse stay yours to enter."""
+        name = self.name.text().strip()
+        weapon = self.window_.weapon
+        slots = buffs_from_name(self.window_.catalog, name, weapon) if name else None
+        if slots is None:
+            self.check_name()
+            return
+        catalog = self.window_.catalog
+        undecided = []
+        for i, row in enumerate(self.rows[:MAX_BUFFS]):
+            candidates = slots[i] if i < len(slots) else [None]
+            row.box.blockSignals(True)
+            if row.box.currentData() not in candidates:
+                row.box.setCurrentIndex(max(row.box.findData(candidates[0]) if len(candidates) == 1 else 0, 0))
+            row.box.blockSignals(False)
+            if len(candidates) > 1 and row.box.currentData() not in candidates:
+                undecided.append(" or ".join(catalog.stat_name(c) for c in candidates))
+        if undecided:
+            self._note(f"Buffs filled in from the name. Pick which it is: {'; '.join(undecided)}.")
+        else:
+            self._note("Buffs filled in from the name. Enter their values and the curse.")
+
+    def check_name(self) -> None:
+        """Warn when the name cannot belong to the chosen buffs (Warframe.Market refuses such a riven)."""
+        name = self.name.text().strip().lower()
+        positives = [row.box.currentData() for row in self.rows[:MAX_BUFFS] if row.box.currentData()]
+        if not name:
+            self._note("")
+        elif positives and name not in valid_names(self.window_.catalog, positives):
+            self._note("This name does not match the buffs picked below. Check both against the game.", warn=True)
+        elif not positives and buffs_from_name(self.window_.catalog, name, self.window_.weapon) is None:
+            self._note("No buffs this weapon can roll make that name. Check the spelling.", warn=True)
+        elif self.name_note.text().startswith("This name") or self.name_note.text().startswith("No buffs"):
+            self._note("")
 
     def set_weapon(self, weapon: RivenWeapon) -> None:
         stats = self.window_.catalog.stats_for(weapon)
@@ -310,8 +385,9 @@ class PricePanel(QWidget):
             allowed = [s for s in stats if not (s.positive_only if row.curse else s.negative_only)]
             _refill(row.box, allowed, [("No curse" if row.curse else "—", None)])
         self.check = None
+        self._note("")
         self.result.setText("")
-        self.detail.setText("Enter your riven's stats, then Check price.")
+        self.detail.setText("Type the riven's name to fill in its buffs, then Check price.")
         self.table.setRowCount(0)
         self.sell_button.setEnabled(False)
 
@@ -335,6 +411,7 @@ class PricePanel(QWidget):
         self.rolls.setValue(draft.rolls)
         self.rank.setValue(draft.rank)
         self.polarity.setCurrentIndex(max(self.polarity.findData(draft.polarity), 0))
+        self.check_name()
 
     def run_check(self) -> None:
         weapon = self.window_.weapon
@@ -431,6 +508,7 @@ class RivenWindow(QWidget):
         layout.addWidget(self.toast)
         self._async_done.connect(lambda callback, result: callback(result))
         self.account_changed()
+        self._wheel_guard = guard_wheel(self)
 
         self.search.textEdited.connect(self._on_search)
         self.search.returnPressed.connect(self._pick_first_suggestion)

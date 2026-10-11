@@ -253,6 +253,44 @@ def parse_auction(a: dict, seller: Optional[str] = None) -> RivenAuction:
     )
 
 
+def buffs_from_name(catalog: "RivenCatalog", name: str,
+                    weapon: Optional[RivenWeapon] = None) -> Optional[list[list[str]]]:
+    """The buffs a riven name stands for, the reverse of valid_names(): "igni-insitron" is Heat
+    (igni) + Puncture (insi) + Damage to Corpus (tron).
+
+    Returns one list of candidate stats per buff, in name order, or None when the name fits no
+    buffs. A buff has several candidates only where stats share a name part (Laci/Nus melee stats,
+    Parci/Pia); `weapon` narrows them to stats it can roll.
+    """
+    stats = catalog.stats_for(weapon) if weapon else catalog.stats
+    prefixes: dict[str, list[str]] = {}
+    suffixes: dict[str, list[str]] = {}
+    for s in stats:
+        if s.prefix and s.suffix:
+            prefixes.setdefault(s.prefix.lower(), []).append(s.slug)
+            suffixes.setdefault(s.suffix.lower(), []).append(s.slug)
+    name = name.strip().lower()
+
+    def split(text: str) -> list[tuple[str, str]]:  # (prefix, suffix) pairs that make up `text`
+        return [(p, text[len(p):]) for p in prefixes if text.startswith(p) and text[len(p):] in suffixes]
+
+    parses = []
+    if name.count("-") == 1:
+        first, rest = name.split("-")
+        if first in prefixes:
+            parses = [[prefixes[first], prefixes[p], suffixes[s]] for p, s in split(rest)]
+    elif "-" not in name:
+        for p, s in split(name):
+            shared = [slug for slug in prefixes[p] if slug in suffixes[s]]
+            parses.append([shared] if shared else [prefixes[p], suffixes[s]])  # "critacron" is one buff
+    # Different splits of one name (exi + ... vs exiti + ...) are rare; keep the one with the fewest
+    # undecided buffs.
+    parses = [p for p in parses if all(p)]
+    if not parses:
+        return None
+    return min(parses, key=lambda p: (sum(len(c) > 1 for c in p), len(p)))
+
+
 def valid_names(catalog: "RivenCatalog", positives: Sequence[str]) -> set[str]:
     """Riven names the game can give these buffs (Warframe.Market rejects any other name).
 
