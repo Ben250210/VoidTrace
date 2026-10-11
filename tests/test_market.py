@@ -391,3 +391,39 @@ def test_order_buttons_fit_their_columns(qapp):
         assert panel.table.columnWidth(col) >= button.sizeHint().width()
         assert panel.table.rowHeight(0) >= button.sizeHint().height()
     window.shutdown()
+
+
+def test_my_orders_sorting(qapp):
+    window, http = _signed_in_window(qapp, {"sell": [], "buy": []})
+    acc = window.account
+    item = "5f4ed3f9d5c36d0086f55b0a"
+    acc.create_order(item, "sell", 12, rank=3, visible=False)
+    acc.create_order(item, "sell", 30, rank=1)
+    acc.create_order(item, "sell", 5, rank=2, visible=False)
+    acc.create_order(item, "sell", 20, rank=0)
+    panel = window.orders_panel
+    panel.refresh()
+    _wait(qapp, lambda: panel.table.rowCount() == 4)
+    header = lambda col: panel.table.horizontalHeaderItem(col).text()  # noqa: E731
+
+    # Default: visible orders first, then hidden.
+    assert [o.visible for o in panel.shown] == [True, True, False, False]
+    assert header(panel.EYE).endswith("\u25b2")
+
+    panel.sort_by(panel.PRICE)                   # first click: highest price first
+    assert [o.platinum for o in panel.shown] == [30, 20, 12, 5]
+    assert header(panel.PRICE) == "Price \u25bc" and header(panel.EYE) == ""
+    panel.sort_by(panel.PRICE)                   # second click: lowest first
+    assert [o.platinum for o in panel.shown] == [5, 12, 20, 30]
+    assert header(panel.PRICE) == "Price \u25b2"
+
+    panel.sort_by(panel.RANK)
+    assert [o.rank for o in panel.shown] == [3, 2, 1, 0]
+    panel.sort_by(panel.EYE)                     # back to state: visible first
+    assert [o.visible for o in panel.shown] == [True, True, False, False]
+    panel.sort_by(panel.EYE)                     # flipped: hidden first
+    assert [o.visible for o in panel.shown] == [False, False, True, True]
+
+    panel.sort_by(panel.MATCH)                   # button columns don't sort
+    assert [o.visible for o in panel.shown] == [False, False, True, True]
+    window.shutdown()

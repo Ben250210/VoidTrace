@@ -392,6 +392,11 @@ class MyOrdersPanel(QWidget):
         layout.addLayout(top)
         layout.addWidget(self.table, 1)
         self.reload.clicked.connect(self.refresh)
+        # Click a column header to sort by it; click again to flip. Default: visible orders first.
+        self.sort_col, self.sort_desc = self.EYE, False
+        header.setSectionsClickable(True)
+        header.sectionClicked.connect(self.sort_by)
+        self._update_header()
 
     def refresh(self) -> None:
         if not self.window_.account.signed_in:
@@ -412,6 +417,47 @@ class MyOrdersPanel(QWidget):
         self.orders = orders
         self._render()
 
+    SORTABLE = {EYE, ITEM, TYPE, RANK, PRICE, QTY}
+    HEADER_TEXT = {EYE: "", ITEM: "Item", TYPE: "Type", RANK: "Rank", PRICE: "Price", QTY: "Qty"}
+
+    def sort_by(self, column: int) -> None:
+        if column not in self.SORTABLE:
+            return
+        if column == self.sort_col:
+            self.sort_desc = not self.sort_desc
+        else:
+            # Numbers start highest first (price, rank, quantity); names and state start A-Z / visible first.
+            self.sort_col, self.sort_desc = column, column in (self.PRICE, self.RANK, self.QTY)
+        self._update_header()
+        self._render()
+
+    def _update_header(self) -> None:
+        for col, text in self.HEADER_TEXT.items():
+            arrow = (" \u25bc" if self.sort_desc else " \u25b2") if col == self.sort_col else ""
+            self.table.horizontalHeaderItem(col).setText(text + arrow)
+            self.table.horizontalHeaderItem(col).setToolTip("Click to sort")
+
+    def sort_key(self, order: MyOrder):
+        item = self.window_.by_id.get(order.item_id)
+        name = (item.name if item else order.item_id).casefold()
+        value = {
+            self.EYE: 0 if order.visible else 1,
+            self.ITEM: name,
+            self.TYPE: order.type,
+            self.RANK: -1 if order.rank is None else order.rank,
+            self.PRICE: order.platinum,
+            self.QTY: order.quantity,
+        }[self.sort_col]
+        return value
+
+    def sorted_orders(self, orders: list[MyOrder]) -> list[MyOrder]:
+        """Sort by the chosen column; ties keep visible orders first, then go by name."""
+        def tie(o: MyOrder):
+            item = self.window_.by_id.get(o.item_id)
+            return (0 if o.visible else 1, (item.name if item else o.item_id).casefold())
+        ordered = sorted(orders, key=tie)  # stable sorts: the tie order survives the main sort
+        return sorted(ordered, key=self.sort_key, reverse=self.sort_desc)
+
     def filtered(self) -> list[MyOrder]:
         state, kind = self.state_filter.currentData(), self.type_filter.currentData()
         return [o for o in self.orders
@@ -423,7 +469,15 @@ class MyOrdersPanel(QWidget):
         return b
 
     def _render(self) -> None:
-        self.shown = self.filtered()
+        self.shown = self.sorted_orders(self.filtered())
+        # Drop the old rows (and their eye/button widgets) first: replacing widgets in place left
+        # the previous row's eye drawn under the new one after a re-sort.
+        for r in range(self.table.rowCount()):
+            for c in (self.EYE, self.MATCH, self.DELETE):
+                old = self.table.cellWidget(r, c)
+                if old is not None:
+                    old.hide()
+        self.table.setRowCount(0)
         self.table.setRowCount(len(self.shown))
         widths = {self.MATCH: 0, self.DELETE: 0}
         row_h = 0
