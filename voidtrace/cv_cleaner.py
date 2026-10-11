@@ -215,11 +215,24 @@ class TesseractNotFound(RuntimeError):
     pass
 
 
+def bundled_tesseract() -> Optional[Path]:
+    """tesseract.exe shipped next to VoidTrace.exe in the release zip (tesseract/ folder)."""
+    if getattr(sys, "frozen", False):
+        candidate = Path(sys.executable).resolve().parent / "tesseract" / "tesseract.exe"
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def find_tesseract() -> Optional[str]:
-    """Locate tesseract.exe: TESSERACT_CMD env var, then PATH, then the default install dir."""
+    """Locate tesseract.exe: TESSERACT_CMD env var, the copy bundled with the release, PATH,
+    then the default install dir."""
     env = os.environ.get("TESSERACT_CMD")
     if env and Path(env).exists():
         return env
+    bundled = bundled_tesseract()
+    if bundled is not None:
+        return str(bundled)
     on_path = shutil.which("tesseract")
     if on_path:
         return on_path

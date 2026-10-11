@@ -2,3 +2,5 @@
 .pytest_cache/
 *.pyc
 demo_output/
+build/
+dist/

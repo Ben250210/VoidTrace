@@ -1,5 +1,26 @@
 # VoidTrace
 
+Prices for Void relic rewards right on the reward screen, plus a Warframe.Market window to find
+sellers and manage your own orders.
+
+## Download (Windows)
+
+1. Go to **[Releases](https://github.com/Ben250210/VoidTrace/releases/latest)** and download
+   `VoidTrace-<version>-windows.zip`.
+2. Unzip it anywhere (for example your Desktop) and open the `VoidTrace` folder.
+3. Double-click **VoidTrace.exe**. A blue crystal icon appears in the system tray (bottom right).
+   - If Windows shows "Windows protected your PC", click **More info**, then **Run anyway**.
+     The app is not code-signed; the source is all here.
+4. In Warframe, set **Display Mode** to **Borderless Fullscreen**.
+5. Open a relic: prices appear under the reward names. **Ctrl+Shift+M** opens the market.
+
+No Python or other installs needed; OCR (Tesseract) is included. If something doesn't work,
+right-click the tray icon, choose **Run self-test**, and send the result (and `voidtrace.log` from
+**Open log folder**). Run only one of WFInfo / Overwolf / AlecaFrame / VoidTrace at a time: they
+share the game's log channel.
+
+## How it works
+
 A read-only Warframe relic-reward companion, built as a set of data-cleaning pipelines.
 It never writes to the game's files and never injects into the process. It reads
 `%LOCALAPPDATA%\Warframe\EE.log`, takes a screenshot, and draws a click-through window
@@ -19,7 +40,7 @@ EE.log ──► 1 log watcher ──► 2 capture + CV clean + OCR ──► 3 
 | 4 | `voidtrace/price_cleaner.py` | Price from closed trades (volume-weighted median, 48 h, else 7 days); listings as fallback: in-game sellers, log-scale Tukey IQR purge, median of the cheapest asks; local cache with stale fallback |
 | 5 | `voidtrace/overlay.py`, `main_app.py` | Frameless, translucent, always-on-top, click-through overlay |
 
-## Setup
+## Running from source
 
 ```
 pip install -r requirements.txt -r requirements-dev.txt
@@ -27,6 +48,8 @@ winget install UB-Mannheim.TesseractOCR   # OCR engine (or set TESSERACT_CMD)
 ```
 
 Run Warframe in **Borderless Fullscreen** so the overlay can sit on top.
+
+Build the Windows release zip with `pip install pyinstaller` then `python tools/build_release.py`.
 
 ## Running
 

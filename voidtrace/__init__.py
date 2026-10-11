@@ -1,4 +1,6 @@
-"""VoidTrace: read-only Warframe companion. Phase 1 exposes the log watcher."""
+"""VoidTrace: read-only Warframe companion."""
+
+__version__ = "1.0.0"
 
 from .log_watcher import (
     DebouncedFilter,

@@ -199,6 +199,7 @@ class LogWatcher:
         if source is None:
             source = LogTailer(path, poll_interval=poll_interval, start_at_eof=True)
         self._source = source
+        self.source = source  # read by the self-test to report which log is in use
         self._idle_sleep = 0.0 if getattr(source, "blocks", False) else poll_interval
         self._on_event = on_event
         self._filter = DebouncedFilter(debounce)

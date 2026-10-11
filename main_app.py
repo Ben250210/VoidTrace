@@ -3,6 +3,7 @@
     python main_app.py                     # watch the game's log, show prices on the reward screen
     python main_app.py --demo shot.png     # run the pipeline once on a screenshot and show it
     python main_app.py --trigger-now --any-window   # capture the screen immediately (for testing)
+    python main_app.py --self-test         # check OCR, Warframe.Market and the game log, then exit
 
 Quit from the tray icon, or Ctrl+C in the console.
 """
@@ -20,11 +21,11 @@ from typing import Optional
 import cv2
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
 from voidtrace.cv_cleaner import TesseractNotFound, capture_screen, warframe_is_foreground
 from voidtrace.debug_log import DebugChannelBusy, DebugLogSource
-from voidtrace import hotkey
+from voidtrace import app_support, hotkey
 from voidtrace.icons import platinum_icon
 from voidtrace.items import load_catalog, load_items
 from voidtrace.market_window import MarketWindow
@@ -131,17 +132,39 @@ def make_line_source(kind: str, path: Path):
     return LogTailer(path, start_at_eof=True)
 
 
-def make_tray(app: QApplication, open_market) -> QSystemTrayIcon:
+def make_tray(app: QApplication, open_market, game_log_status=lambda: None) -> QSystemTrayIcon:
     tray = QSystemTrayIcon(QIcon(platinum_icon(32)), app)
     tray.setToolTip("VoidTrace")
     menu = QMenu()
     menu.addAction("Open market (Ctrl+Shift+M)", open_market)
+    menu.addAction("Run self-test", lambda: show_self_test(game_log_status()))
+    menu.addAction("Open log folder", lambda: _open_folder(app_support.log_path().parent))
     menu.addSeparator()
     menu.addAction("Quit VoidTrace", app.quit)
     tray.activated.connect(lambda reason: open_market() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
     tray.setContextMenu(menu)
     tray.show()
     return tray
+
+
+def _open_folder(path: Path) -> None:
+    import os
+
+    os.startfile(str(path))  # noqa: S606 - opens Explorer on our own log folder
+
+
+def show_self_test(game_log_status: Optional[str] = None) -> bool:
+    results = app_support.self_test(game_log_status)
+    text = app_support.format_results(results)
+    log.info("self-test:\n%s", text)
+    if sys.stdout is not None:
+        print(text)
+    ok = all(passed for _, passed, _ in results)
+    box = QMessageBox(QMessageBox.Icon.Information if ok else QMessageBox.Icon.Warning, "VoidTrace self-test",
+                      ("Everything VoidTrace needs is working.\n\n" if ok else
+                       "Something VoidTrace needs is not working:\n\n") + text)
+    box.exec()
+    return ok
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -161,13 +184,26 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--hide-after", type=float, default=20.0,
                         help="fallback: seconds the overlay stays up if the close line is missed")
     parser.add_argument("--no-hotkey", action="store_true", help="do not register Ctrl+Shift+M")
+    parser.add_argument("--self-test", action="store_true",
+                        help="check OCR, Warframe.Market and the game log, show the result and exit")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(asctime)s %(message)s")
+    log_file = app_support.setup_logging(args.verbose)
+    log.info("VoidTrace starting (log: %s)", log_file)
 
     app = QApplication(sys.argv[:1])
     app.setQuitOnLastWindowClosed(False)
+    app.setWindowIcon(QIcon(platinum_icon(64)))
+    if args.self_test:
+        return 0 if show_self_test() else 1
+
+    instance_lock = app_support.acquire_single_instance()  # noqa: F841 (held until exit)
+    if instance_lock is None:
+        QMessageBox.information(None, "VoidTrace", "VoidTrace is already running.\n\n"
+                                "Look for the blue crystal icon in the system tray (bottom right, near the clock). "
+                                "Ctrl+Shift+M opens the market.")
+        return 0
     signal.signal(signal.SIGINT, lambda *_: app.quit())
     # Let Python handle Ctrl+C while Qt's loop runs.
     heartbeat = QTimer(interval=250)
@@ -202,10 +238,22 @@ def main(argv: Optional[list[str]] = None) -> int:
             market.open_item(item.slug)
 
     overlay.card_clicked.connect(open_card)
-    tray = make_tray(app, open_market)  # noqa: F841 (keep a reference)
+    watcher = None
+
+    def game_log_status() -> Optional[str]:
+        if watcher is None:
+            return None
+        if isinstance(watcher.source, DebugLogSource):
+            return "live game log in use by this VoidTrace"
+        return ("FAIL: using the slower log file: another program (WFInfo, Overwolf, DebugView) "
+                "was reading the game's log when VoidTrace started")
+
+    tray = make_tray(app, open_market, game_log_status)
+    tray.showMessage("VoidTrace is running",
+                     "Prices appear on relic reward screens (Borderless Fullscreen). Ctrl+Shift+M opens the market.",
+                     QIcon(platinum_icon(64)), 7000)
     hotkey_filter = None if args.no_hotkey else hotkey.register(app, open_market)  # noqa: F841
 
-    watcher = None
     if args.demo is not None:
         frame = cv2.imread(str(args.demo))
         if frame is None:
