@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from voidtrace import __version__  # noqa: E402
+from voidtrace import __version__, disclaimer  # noqa: E402
 
 TESSERACT_DIR = Path(os.environ.get("TESSERACT_DIR", r"C:\Program Files\Tesseract-OCR"))
 BUILD = ROOT / "build"
@@ -66,7 +66,11 @@ SOMETHING WRONG?
 
 QUIT
   Right-click the tray icon > Quit VoidTrace.
-"""
+
+ACCENT COLOUR
+  Right-click the tray icon > Accent colour: pick a preset or any colour.
+
+""" + disclaimer.text_for_file() + "\n"
 
 
 def make_icon() -> Path:

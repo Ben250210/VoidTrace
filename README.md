@@ -2,6 +2,13 @@
 
 # VoidTrace
 
+> [!WARNING]
+> **Use at your own risk.** VoidTrace is an unofficial fan project, not affiliated with or endorsed by
+> Digital Extremes (Warframe) or Warframe.Market. It only reads the game's log and your screen and never
+> touches the game itself, but whether third-party tools are allowed is up to Digital Extremes. It comes
+> with **no warranty**, and its authors are **not responsible for bans, suspensions, lost platinum or
+> items, or any other loss** from using it. Full text: [DISCLAIMER.md](DISCLAIMER.md).
+
 Prices for Void relic rewards right on the reward screen, a Warframe.Market window to find
 sellers and manage your own orders, and a riven window that reads a riven off the screen, grades
 its rolls and prices it.
@@ -125,6 +132,12 @@ refreshed with `python tools/update_riven_bases.py`):
 Screen reading is tested on 11 real cards (8 in Item Details, 3 on the Cycle screen, where rolls
 come from the Kuva price) at 2560x1600, 1920x1200 and 1680x1050 (weapon, name, stats, MR, rolls,
 rank, polarity); 16:9 screens and other UI scales are not verified yet.
+
+## Accent colour
+
+Right-click the tray icon > **Accent colour** to pick a preset (Void blue, Cyan, Purple, Pink, Gold,
+Green, Red) or any colour with **Custom...**. Buttons, tabs, the riven popup and the best reward card
+change at once, and the choice is remembered (`%LOCALAPPDATA%\VoidTrace\settings.json`).
 
 ## Price cache
 

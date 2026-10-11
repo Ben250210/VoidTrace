@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from . import theme
 from .account import Account, MarketError, MyOrder, NotSignedIn, TopOrder, suggested_price, top_orders
 from .icons import eye_icon, platinum_icon
 
@@ -154,7 +155,7 @@ class SignInDialog(QDialog):
         super().__init__(window)
         self.window_ = window
         self.setWindowTitle("Sign in to Warframe.Market")
-        self.setStyleSheet(window.styleSheet() + BUTTON_STYLE)
+        self.setStyleSheet(window.styleSheet() + theme.apply(BUTTON_STYLE))
         self.email = QLineEdit(placeholderText="Email or username")
         self.password = QLineEdit(placeholderText="Password")
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
@@ -198,7 +199,7 @@ class PostOrderPanel(QWidget):
         self.window_ = window
         self.top: dict[str, list[TopOrder]] = {"sell": [], "buy": []}
         self._request = 0
-        self.setStyleSheet(BUTTON_STYLE)
+        theme.follow(self, BUTTON_STYLE)
 
         self.side = QComboBox()
         self.side.addItem("Sell", "sell")
@@ -387,7 +388,7 @@ class MyOrdersPanel(QWidget):
         self.window_ = window
         self.orders: list[MyOrder] = []
         self.shown: list[MyOrder] = []
-        self.setStyleSheet(BUTTON_STYLE)
+        theme.follow(self, BUTTON_STYLE)
         self.table = _table(self.COLUMNS)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(self.EYE, QHeaderView.ResizeMode.Fixed)

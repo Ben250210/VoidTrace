@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
 )
 from rapidfuzz import fuzz, process, utils
 
+from . import theme
 from .account import Account
 from .icons import platinum_icon
 from .items import CatalogItem
@@ -142,7 +143,7 @@ class MarketWindow(QWidget):
         super().__init__()
         self.setWindowTitle("VoidTrace market")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint)
-        self.setStyleSheet(STYLE)
+        theme.follow(self, STYLE)
         self.resize(640, 560)
         self.catalog = list(catalog)
         self.by_slug = {item.slug: item for item in self.catalog}

@@ -13,6 +13,7 @@ from PyQt6.QtCore import QPointF, QRect, QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QRegion
 from PyQt6.QtWidgets import QWidget
 
+from . import theme
 from .cv_cleaner import reward_band, reward_slots
 from .icons import ducat_icon, platinum_icon
 from .pipeline import RewardCard
@@ -27,7 +28,6 @@ GAP_BELOW_NAMES = 130
 
 BG = QColor(11, 18, 32, 215)
 BORDER = QColor(51, 71, 110, 230)
-BEST = QColor(110, 190, 255, 255)
 TEXT = QColor(230, 238, 251)
 MUTED = QColor(143, 163, 194)
 WARN = QColor(240, 140, 90)
@@ -130,7 +130,8 @@ class OverlayWindow(QWidget):
         painter.end()
 
     def _paint_card(self, p: QPainter, card: RewardCard, rect: QRect, hovered: bool = False) -> None:
-        border = BEST if card.best else (TEXT if hovered else BORDER)
+        best = theme.accent()  # the best reward stands out in the accent colour
+        border = best if card.best else (TEXT if hovered else BORDER)
         p.setPen(QPen(border, 2 if (card.best or hovered) else 1))
         p.setBrush(BG)
         p.drawRoundedRect(rect, 6, 6)
@@ -180,7 +181,7 @@ class OverlayWindow(QWidget):
             return
 
         text(0, card.name, TEXT, line_h * 0.6, bold=True)
-        price_color = BEST if card.best else TEXT
+        price_color = best if card.best else TEXT
         if card.resolution.item.slug is None:
             text(1, "Untradable", price_color, line_h * 0.85, bold=True)
         elif card.pending:

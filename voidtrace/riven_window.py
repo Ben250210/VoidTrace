@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from . import theme
 from .account import Account
 from .icons import platinum_icon
 from .market_window import STYLE, search_catalog
@@ -516,7 +517,7 @@ class RivenWindow(QWidget):
         super().__init__()
         self.setWindowTitle("VoidTrace rivens")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint)
-        self.setStyleSheet(STYLE + BUTTON_STYLE)
+        theme.follow(self, STYLE + BUTTON_STYLE)
         self.resize(980, 680)
         self.catalog = catalog
         self.service = service

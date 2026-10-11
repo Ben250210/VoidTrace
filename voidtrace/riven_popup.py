@@ -15,6 +15,7 @@ from PyQt6.QtCore import QObject, QRect, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from . import theme
 from .icons import draw_amount, platinum_icon, voidtrace_logo
 from .rivens import (
     PriceCheck,
@@ -36,7 +37,6 @@ log = logging.getLogger(__name__)
 
 WIDTH = 330
 PANEL = QColor(11, 18, 32, 238)
-BORDER = QColor(79, 163, 255)
 TEXT = QColor(230, 238, 251)
 MUTED = QColor(143, 163, 194)
 BUFF = QColor(124, 201, 156)
@@ -97,7 +97,7 @@ class PriceLine(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         font = QFont("Segoe UI", 15, QFont.Weight.DemiBold)
         draw_amount(p, self.rect(), platinum_icon(20, self.devicePixelRatioF()), self.text, font,
-                    QColor(140, 200, 255), Qt.AlignmentFlag.AlignLeft)
+                    theme.accent().lighter(130), Qt.AlignmentFlag.AlignLeft)
         p.end()
 
 
@@ -232,7 +232,7 @@ class RivenPopup(QWidget):
     def paintEvent(self, _event) -> None:  # noqa: N802
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setPen(QPen(BORDER, 1.5))
+        p.setPen(QPen(theme.accent(), 1.5))
         p.setBrush(PANEL)
         p.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), 10, 10)
         p.end()

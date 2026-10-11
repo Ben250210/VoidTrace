@@ -22,11 +22,12 @@ from typing import Optional
 import cv2
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
+from PyQt6.QtGui import QActionGroup, QColor
+from PyQt6.QtWidgets import QApplication, QColorDialog, QMenu, QMessageBox, QSystemTrayIcon
 
 from voidtrace.cv_cleaner import TesseractNotFound, capture_screen, warframe_is_foreground
 from voidtrace.debug_log import DebugChannelBusy, DebugLogSource
-from voidtrace import app_support, hotkey
+from voidtrace import app_support, disclaimer, hotkey, settings, theme
 from voidtrace.icons import voidtrace_logo
 from voidtrace.items import load_catalog, load_items
 from voidtrace.market_window import MarketWindow
@@ -155,14 +156,59 @@ def make_tray(app: QApplication, open_market, game_log_status=lambda: None, open
         popup_action.setCheckable(True)
         popup_action.setChecked(True)
         popup_action.toggled.connect(toggle_riven_popup)
+    add_accent_menu(menu)
     menu.addAction("Run self-test", lambda: show_self_test(game_log_status()))
     menu.addAction("Open log folder", lambda: _open_folder(app_support.log_path().parent))
+    menu.addAction("Disclaimer (use at your own risk)", lambda: show_disclaimer(first_run=False))
     menu.addSeparator()
     menu.addAction("Quit VoidTrace", app.quit)
     tray.activated.connect(lambda reason: open_market() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
     tray.setContextMenu(menu)
     tray.show()
     return tray
+
+
+def add_accent_menu(menu: QMenu) -> QMenu:
+    """Tray > Accent colour: presets, or any colour; remembered, and every window follows at once."""
+    sub = menu.addMenu("Accent colour")
+    group = QActionGroup(sub)
+    current = theme.accent_hex().lower()
+    for name, color in theme.PRESETS.items():
+        action = sub.addAction(name)
+        action.setCheckable(True)
+        action.setChecked(color.lower() == current)
+        action.setActionGroup(group)
+        action.triggered.connect(lambda _=False, c=color: theme.set_accent(c))
+    sub.addSeparator()
+
+    def pick() -> None:
+        chosen = QColorDialog.getColor(theme.accent(), None, "VoidTrace accent colour")
+        if chosen.isValid():
+            for action in group.actions():
+                action.setChecked(False)
+            theme.set_accent(chosen.name())
+
+    sub.addAction("Custom…", pick)
+    return sub
+
+
+def show_disclaimer(first_run: bool) -> bool:
+    """The use-at-your-own-risk notice. On first run it must be accepted; returns False to quit."""
+    box = QMessageBox()
+    box.setWindowTitle(disclaimer.TITLE)
+    box.setIcon(QMessageBox.Icon.Warning)
+    box.setText(disclaimer.SHORT)
+    if not first_run:
+        box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        box.exec()
+        return True
+    agree = box.addButton("I understand, start VoidTrace", QMessageBox.ButtonRole.AcceptRole)
+    box.addButton("Quit", QMessageBox.ButtonRole.RejectRole)
+    box.exec()
+    if box.clickedButton() is not agree:
+        return False
+    settings.put("disclaimer_ok", True)
+    return True
 
 
 def _open_folder(path: Path) -> None:
@@ -218,6 +264,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.self_test:
         return 0 if show_self_test() else 1
 
+    if not settings.get("disclaimer_ok") and not show_disclaimer(first_run=True):
+        return 0
     instance_lock = app_support.acquire_single_instance()  # noqa: F841 (held until exit)
     if instance_lock is None:
         QMessageBox.information(None, "VoidTrace", "VoidTrace is already running.\n\n"
@@ -303,6 +351,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     from voidtrace.riven_watch import RivenScreenWatcher
 
     riven_popup = RivenPopup(screen.geometry())
+    theme.on_change(lambda: (riven_popup.update(), overlay.update()))  # painted in the accent
     riven_assistant = RivenAssistant(riven_data, riven_popup,
                                      lambda: market.account.ingame_name if market.account.signed_in else None,
                                      open_riven_details)
