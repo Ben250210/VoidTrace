@@ -14,6 +14,7 @@ import argparse
 import logging
 import signal
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
@@ -141,13 +142,19 @@ def app_icon() -> QIcon:
     return icon
 
 
-def make_tray(app: QApplication, open_market, game_log_status=lambda: None, open_rivens=None) -> QSystemTrayIcon:
+def make_tray(app: QApplication, open_market, game_log_status=lambda: None, open_rivens=None,
+              toggle_riven_popup=None) -> QSystemTrayIcon:
     tray = QSystemTrayIcon(app_icon(), app)
     tray.setToolTip("VoidTrace")
     menu = QMenu()
     menu.addAction("Open market (Ctrl+Shift+M)", open_market)
     if open_rivens is not None:
         menu.addAction("Rivens (Ctrl+Shift+R)", open_rivens)
+    if toggle_riven_popup is not None:
+        popup_action = menu.addAction("Riven popup in Cycle / Item Details")
+        popup_action.setCheckable(True)
+        popup_action.setChecked(True)
+        popup_action.toggled.connect(toggle_riven_popup)
     menu.addAction("Run self-test", lambda: show_self_test(game_log_status()))
     menu.addAction("Open log folder", lambda: _open_folder(app_support.log_path().parent))
     menu.addSeparator()
@@ -246,15 +253,24 @@ def main(argv: Optional[list[str]] = None) -> int:
         market.search.setFocus()
 
     rivens = None
+    riven_data_cache: dict = {}
+    riven_data_lock = threading.Lock()
+
+    def riven_data():
+        """Riven weapons/stats and the auction search, loaded once (on first use: one more download)."""
+        with riven_data_lock:
+            if not riven_data_cache:
+                riven_data_cache["catalog"] = load_riven_catalog(market.sellers.client)
+                riven_data_cache["service"] = RivenService(market.sellers.client)
+            return riven_data_cache["catalog"], riven_data_cache["service"]
 
     def open_rivens() -> None:
         nonlocal rivens
-        if rivens is None:  # built on first use: its weapon list is one more download
+        if rivens is None:
             from voidtrace.riven_window import RivenWindow
 
             try:
-                rivens = RivenWindow(load_riven_catalog(market.sellers.client), RivenService(market.sellers.client),
-                                     account=market.account)
+                rivens = RivenWindow(*riven_data(), account=market.account)
             except Exception as exc:
                 log.warning("could not load riven data: %s", exc)
                 QMessageBox.warning(None, "VoidTrace", f"Could not load riven data from Warframe.Market:\n{exc}")
@@ -276,6 +292,32 @@ def main(argv: Optional[list[str]] = None) -> int:
         if frame is not None and rivens is not None:
             rivens.read_from_frame(frame)
 
+    def open_riven_details(draft, _check) -> None:
+        """The popup was clicked: the full riven window on that riven, price check included."""
+        open_rivens()
+        if rivens is not None and draft is not None:
+            rivens.load_draft(draft)
+            rivens.price_panel.run_check()
+
+    from voidtrace.riven_popup import RivenAssistant, RivenPopup
+    from voidtrace.riven_watch import RivenScreenWatcher
+
+    riven_popup = RivenPopup(screen.geometry())
+    riven_assistant = RivenAssistant(riven_data, riven_popup,
+                                     lambda: market.account.ingame_name if market.account.signed_in else None,
+                                     open_riven_details)
+    riven_watcher = RivenScreenWatcher(lambda: capture_screen(args.monitor),
+                                       None if args.any_window else warframe_is_foreground)
+    riven_watcher.card_shown.connect(riven_assistant.card_shown)
+    riven_watcher.card_hidden.connect(riven_assistant.card_hidden)
+
+    def toggle_riven_popup(on: bool) -> None:
+        if on:
+            riven_watcher.start()
+        else:
+            riven_watcher.stop()
+        log.info("riven popup %s", "on" if on else "off")
+
     def open_card(slot: int) -> None:
         item = overlay.cards[slot].resolution.item
         if item is not None and item.slug is not None:
@@ -292,7 +334,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return ("FAIL: using the slower log file: another program (WFInfo, Overwolf, DebugView) "
                 "was reading the game's log when VoidTrace started")
 
-    tray = make_tray(app, open_market, game_log_status, open_rivens)
+    tray = make_tray(app, open_market, game_log_status, open_rivens, toggle_riven_popup)
+    riven_watcher.start()
     tray.showMessage("VoidTrace is running",
                      "Prices appear on relic reward screens (Borderless Fullscreen). Ctrl+Shift+M opens the market.",
                      app_icon(), 7000)
@@ -330,6 +373,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             watcher.stop()
         controller.shutdown()
         market.shutdown()
+        riven_watcher.stop()
+        riven_assistant.shutdown()
         if rivens is not None:
             rivens.shutdown()
         hotkey.unregister()

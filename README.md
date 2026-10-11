@@ -103,6 +103,12 @@ Windows Credential Manager (`keyring`) and removed by **Sign out**. Nothing is p
 **Ctrl+Shift+R** (or tray > Rivens) opens the riven window. With a riven on screen, in
 **Inventory > Mods > Cycle** or in **Item Details**, Ctrl+Shift+R reads the card and prices it.
 
+**Riven popup:** you don't even need the hotkey. While a riven is open on the Cycle screen or in
+Item Details, a small panel appears at the right edge with its stats, how well each rolled and a
+price estimate; click it for the full riven window. VoidTrace notices the card by the emblem at its
+top (the screen is checked about every 0.7 s, only while Warframe is the active window). Turn it off
+from the tray menu.
+
 - **Find rivens**: auctions for a weapon, filtered by wanted stats, curse, buyout only and
   clean (never rolled) / rolled. Click one to copy a whisper that names the riven:
   `/w Seller Hi! I'd like to buy your Ocucor Sati-toxitio riven for 1500 platinum. (warframe.market through VoidTrace)`
