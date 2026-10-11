@@ -24,10 +24,10 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 WIDTH = 330
-PANEL = QColor(15, 17, 25, 238)
-BORDER = QColor(134, 110, 200)
-TEXT = QColor(231, 229, 220)
-MUTED = QColor(155, 160, 181)
+PANEL = QColor(11, 18, 32, 238)
+BORDER = QColor(79, 163, 255)
+TEXT = QColor(230, 238, 251)
+MUTED = QColor(143, 163, 194)
 BUFF = QColor(124, 201, 156)
 CURSE = QColor(240, 110, 90)
 AMBER = QColor(230, 180, 80)
@@ -53,7 +53,7 @@ class GradeBar(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         bar = QRectF(0, 5, 54, 6)
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(42, 47, 69))
+        p.setBrush(QColor(34, 49, 79))
         p.drawRoundedRect(bar, 3, 3)
         p.setBrush(grade_color(self.value))
         p.drawRoundedRect(QRectF(bar.x(), bar.y(), max(4.0, bar.width() * self.value / 100), bar.height()), 3, 3)
@@ -82,7 +82,7 @@ class PriceLine(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         font = QFont("Segoe UI", 15, QFont.Weight.DemiBold)
         draw_amount(p, self.rect(), platinum_icon(20, self.devicePixelRatioF()), self.text, font,
-                    QColor(217, 180, 92), Qt.AlignmentFlag.AlignLeft)
+                    QColor(140, 200, 255), Qt.AlignmentFlag.AlignLeft)
         p.end()
 
 

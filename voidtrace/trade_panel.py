@@ -42,28 +42,28 @@ if TYPE_CHECKING:
     from .market_window import MarketWindow
 
 BUTTON_STYLE = """
-QPushButton { background: #2a2f45; border: 1px solid #3a4160; border-radius: 4px; padding: 6px 12px; }
-QPushButton:hover { background: #343a55; }
-QPushButton#primary { background: #d9b45c; color: #14161f; border: none; font-weight: 600; }
-QPushButton#primary:hover { background: #e6c472; }
+QPushButton { background: #22314f; border: 1px solid #33476e; border-radius: 4px; padding: 6px 12px; }
+QPushButton:hover { background: #2b3d62; }
+QPushButton#primary { background: #4fa3ff; color: #06101f; border: none; font-weight: 600; }
+QPushButton#primary:hover { background: #74b8ff; }
 QPushButton#danger { color: #f08a6e; padding: 3px 10px; }
 QPushButton#small { padding: 3px 10px; }
 QToolButton#eye { background: transparent; border: none; padding: 2px; }
-QToolButton#eye:hover { background: #1d2131; border-radius: 4px; }
-QSpinBox { background: #171a26; border: 1px solid #2a2f45; border-radius: 4px; padding: 4px 6px; }
-QToolButton#step { background: #2a2f45; border: 1px solid #3a4160; border-radius: 4px; font-weight: 700;
+QToolButton#eye:hover { background: #16213a; border-radius: 4px; }
+QSpinBox { background: #111a2e; border: 1px solid #22314f; border-radius: 4px; padding: 4px 6px; }
+QToolButton#step { background: #22314f; border: 1px solid #33476e; border-radius: 4px; font-weight: 700;
                    min-width: 26px; min-height: 24px; }
-QToolButton#step:hover { background: #3a4160; }
-QToolButton#step:pressed { background: #d9b45c; color: #14161f; }
+QToolButton#step:hover { background: #33476e; }
+QToolButton#step:pressed { background: #4fa3ff; color: #06101f; }
 QRadioButton::indicator, QCheckBox::indicator { width: 14px; height: 14px; }
-QRadioButton::indicator { border-radius: 8px; border: 2px solid #6b7190; background: #0f1119; }
-QRadioButton::indicator:hover { border-color: #d9b45c; }
-QRadioButton::indicator:checked { border: 2px solid #d9b45c;
+QRadioButton::indicator { border-radius: 8px; border: 2px solid #5b7099; background: #0b1220; }
+QRadioButton::indicator:hover { border-color: #4fa3ff; }
+QRadioButton::indicator:checked { border: 2px solid #4fa3ff;
     background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
-                                stop:0 #d9b45c, stop:0.5 #d9b45c, stop:0.6 #0f1119, stop:1 #0f1119); }
+                                stop:0 #4fa3ff, stop:0.5 #4fa3ff, stop:0.6 #0b1220, stop:1 #0b1220); }
 """
 TOP_COLUMNS = ["Player", "Rep", "Price", "Rank", "Qty"]
-STATUS_DOT = {"ingame": QColor(124, 201, 156), "online": QColor(143, 163, 255)}
+STATUS_DOT = {"ingame": QColor(124, 201, 156), "online": QColor(120, 185, 255)}
 
 
 class WheelGuard(QObject):
@@ -315,7 +315,7 @@ class PostOrderPanel(QWidget):
         for table, rows in ((self.sell_table, top["sell"]), (self.buy_table, top["buy"])):
             table.setRowCount(max(1, len(rows)))
             if not rows:
-                table.setItem(0, 0, _cell("Orders not found", color=QColor(155, 160, 181)))
+                table.setItem(0, 0, _cell("Orders not found", color=QColor(143, 163, 194)))
                 continue
             for r, o in enumerate(rows):
                 table.setItem(r, 0, _cell(f"●  {o.ingame_name}", color=STATUS_DOT.get(o.status)))
@@ -515,9 +515,9 @@ class MyOrdersPanel(QWidget):
             eye.clicked.connect(lambda _=False, order=o: self.toggle_visible(order))
             self.table.setCellWidget(r, self.EYE, eye)
             self.table.setItem(r, self.ITEM, _cell(item.name if item else o.item_id,
-                                                   color=None if o.visible else QColor(155, 160, 181)))
+                                                   color=None if o.visible else QColor(143, 163, 194)))
             self.table.setItem(r, self.TYPE, _cell(o.type.capitalize(),
-                                                   color=QColor(124, 201, 156) if o.type == "sell" else QColor(143, 163, 255)))
+                                                   color=QColor(124, 201, 156) if o.type == "sell" else QColor(120, 185, 255)))
             self.table.setItem(r, self.RANK, _cell("" if o.rank is None else str(o.rank), right=True))
             self.table.setItem(r, self.PRICE, _cell(str(o.platinum), right=True, icon=platinum_icon(14)))
             self.table.setItem(r, self.QTY, _cell(str(o.quantity), right=True))

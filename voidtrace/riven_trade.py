@@ -32,7 +32,7 @@ from .trade_panel import Stepper, _cell, _table
 if TYPE_CHECKING:
     from .riven_window import RivenWindow
 
-MUTED = QColor(155, 160, 181)
+MUTED = QColor(143, 163, 194)
 BUFF_COLOR = QColor(124, 201, 156)
 CURSE_COLOR = QColor(240, 110, 90)
 
@@ -107,7 +107,7 @@ class SellPanel(QWidget):
         lines = "<br>".join(
             f'<span style="color:{"#7cc99c" if a.positive else "#f06e5a"}">{catalog.format_attr(a)}</span>'
             for a in draft.attrs)
-        self.summary.setText(f'<b>{title}</b> &nbsp;<span style="color:#9ba0b5">MR {draft.mr} · '
+        self.summary.setText(f'<b>{title}</b> &nbsp;<span style="color:#8fa3c2">MR {draft.mr} · '
                              f'{draft.rolls} rolls · rank {draft.rank} · {draft.polarity}</span><br>{lines}')
         names = valid_names(catalog, draft.positives)
         if not draft.name:

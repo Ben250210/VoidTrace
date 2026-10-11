@@ -25,11 +25,11 @@ CARD_HEIGHT = 92          # reference pixels at 1080p; scaled with the screen
 # showed cards placed right under the names covering that list, so they sit below it.
 GAP_BELOW_NAMES = 130
 
-BG = QColor(12, 14, 20, 215)
-BORDER = QColor(70, 80, 100, 230)
-BEST = QColor(232, 190, 90, 255)
-TEXT = QColor(235, 238, 245)
-MUTED = QColor(150, 158, 175)
+BG = QColor(11, 18, 32, 215)
+BORDER = QColor(51, 71, 110, 230)
+BEST = QColor(110, 190, 255, 255)
+TEXT = QColor(230, 238, 251)
+MUTED = QColor(143, 163, 194)
 WARN = QColor(240, 140, 90)
 
 

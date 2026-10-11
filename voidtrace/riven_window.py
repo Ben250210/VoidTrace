@@ -64,7 +64,7 @@ BUFF_COLOR = QColor(124, 201, 156)
 CLEAN_COLOR = QColor(124, 201, 156)  # never-rolled rivens: worth calling out to buyers
 CURSE_COLOR = QColor(240, 110, 90)
 STATUS_LABEL = {"ingame": "In game", "online": "Online", "offline": "Offline"}
-STATUS_COLOR = {"ingame": QColor(124, 201, 156), "online": QColor(143, 163, 255), "offline": QColor(155, 160, 181)}
+STATUS_COLOR = {"ingame": QColor(124, 201, 156), "online": QColor(120, 185, 255), "offline": QColor(143, 163, 194)}
 # Rank matters: sellers list stat values at the riven's current rank (a rank-0 riven shows about a
 # ninth of its maxed values).
 AUCTION_COLUMNS = ["Riven", "Buffs", "Curse", "MR", "Rank", "Rolls", "Grade", "Price", "Seller"]
@@ -81,7 +81,7 @@ def disposition_dots(disposition: float) -> str:
 
 
 def weapon_title(weapon: RivenWeapon) -> str:
-    return (f'{html.escape(weapon.name)} <span style="color:#9ba0b5; font-size:13px; font-weight:400">'
+    return (f'{html.escape(weapon.name)} <span style="color:#8fa3c2; font-size:13px; font-weight:400">'
             f'{disposition_dots(weapon.disposition)} {weapon.disposition:.2f}</span>')
 
 
@@ -117,7 +117,7 @@ def fill_auction_table(table: QTableWidget, catalog: RivenCatalog, auctions: lis
         cells = [
             _cell(catalog.riven_title(a)),
             _cell(buffs, color=BUFF_COLOR),
-            _cell(curse, color=CURSE_COLOR if a.negative else QColor(155, 160, 181)),
+            _cell(curse, color=CURSE_COLOR if a.negative else QColor(143, 163, 194)),
             _cell(str(a.mr), right=True),
             _cell(str(a.rank), right=True),
             _cell("0 \u00b7 clean" if a.rolls == 0 else str(a.rolls), right=True,
@@ -376,7 +376,7 @@ class PricePanel(QWidget):
     # --- the name and the buffs must agree -------------------------------------------------
 
     def _note(self, text: str, warn: bool = False) -> None:
-        self.name_note.setStyleSheet("color: #e6b450;" if warn else "color: #9ba0b5;")
+        self.name_note.setStyleSheet("color: #e6b450;" if warn else "color: #8fa3c2;")
         self.name_note.setText(text)
         self.name_note.setVisible(bool(text))
 
@@ -489,7 +489,7 @@ class PricePanel(QWidget):
             return
         mine = self.my_grade()
         self.result.setText(f"About {check.estimate:g} platinum" +
-                            (f'  <span style="color:#9ba0b5; font-size:13px; font-weight:400">your roll: {mine}%</span>'
+                            (f'  <span style="color:#8fa3c2; font-size:13px; font-weight:400">your roll: {mine}%</span>'
                              if mine is not None else ""))
         extra = f" {len(check.outliers)} extreme price(s) left out." if check.outliers else ""
         if check.exact and check.tier not in ("same stats and curse", "same stats, no curse", "same positive stats"):

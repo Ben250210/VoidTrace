@@ -166,7 +166,7 @@ def eye_icon(size: int, visible: bool, ratio: float = 1.0) -> QPixmap:
     p.setBrush(color)
     p.drawEllipse(QPointF(s / 2, s / 2), s * 0.15, s * 0.15)
     if not visible:
-        p.setPen(QPen(QColor(15, 17, 25), max(3.0, s / 5)))  # gap so the slash reads clearly
+        p.setPen(QPen(QColor(11, 18, 32), max(3.0, s / 5)))  # gap so the slash reads clearly
         p.drawLine(QPointF(s * 0.16, s * 0.84), QPointF(s * 0.84, s * 0.16))
         p.setPen(pen)
         p.drawLine(QPointF(s * 0.16, s * 0.84), QPointF(s * 0.84, s * 0.16))

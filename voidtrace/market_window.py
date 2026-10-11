@@ -41,28 +41,28 @@ from .sellers import SellerOrder, SellerService, rank_counts, whisper_text
 log = logging.getLogger(__name__)
 
 STYLE = """
-QWidget { background: #0f1119; color: #e7e5dc; font-family: 'Segoe UI'; font-size: 13px; }
-QLineEdit, QComboBox { background: #171a26; border: 1px solid #2a2f45; border-radius: 4px; padding: 5px 8px; }
-QLineEdit:focus { border-color: #d9b45c; }
-QListWidget { background: #171a26; border: 1px solid #2a2f45; }
-QListWidget::item:selected { background: #2a2f45; }
-QTableWidget { background: #0f1119; border: none; gridline-color: #1d2131; }
+QWidget { background: #0b1220; color: #e6eefb; font-family: 'Segoe UI'; font-size: 13px; }
+QLineEdit, QComboBox { background: #111a2e; border: 1px solid #22314f; border-radius: 4px; padding: 5px 8px; }
+QLineEdit:focus { border-color: #4fa3ff; }
+QListWidget { background: #111a2e; border: 1px solid #22314f; }
+QListWidget::item:selected { background: #22314f; }
+QTableWidget { background: #0b1220; border: none; gridline-color: #16213a; }
 QTableWidget::item { padding: 4px; }
-QTableWidget::item:hover { background: #1d2131; }
-QHeaderView::section { background: #0f1119; color: #9ba0b5; border: none; border-bottom: 1px solid #2a2f45;
+QTableWidget::item:hover { background: #16213a; }
+QHeaderView::section { background: #0b1220; color: #8fa3c2; border: none; border-bottom: 1px solid #22314f;
                        padding: 6px; font-size: 11px; font-weight: 600; }
 QLabel#title { font-size: 18px; font-weight: 600; }
 QLabel#toast { color: #7cc99c; }
-QLabel#muted { color: #9ba0b5; }
-QTabWidget::pane { border: none; border-top: 1px solid #2a2f45; }
-QTabBar::tab { background: #0f1119; color: #9ba0b5; padding: 7px 14px; border: none; }
-QTabBar::tab:selected { color: #e7e5dc; border-bottom: 2px solid #d9b45c; }
-QPushButton#account { background: #171a26; border: 1px solid #2a2f45; border-radius: 4px; padding: 5px 10px; }
+QLabel#muted { color: #8fa3c2; }
+QTabWidget::pane { border: none; border-top: 1px solid #22314f; }
+QTabBar::tab { background: #0b1220; color: #8fa3c2; padding: 7px 14px; border: none; }
+QTabBar::tab:selected { color: #e6eefb; border-bottom: 2px solid #4fa3ff; }
+QPushButton#account { background: #111a2e; border: 1px solid #22314f; border-radius: 4px; padding: 5px 10px; }
 """
 
 COLUMNS = ["Seller", "Status", "Rank", "Price", "Qty", "Rep"]
 STATUS_LABEL = {"ingame": "In game", "online": "Online"}
-STATUS_COLOR = {"ingame": QColor(124, 201, 156), "online": QColor(143, 163, 255)}
+STATUS_COLOR = {"ingame": QColor(124, 201, 156), "online": QColor(120, 185, 255)}
 MAX_SUGGESTIONS = 8
 
 
@@ -129,7 +129,7 @@ def item_title(item: CatalogItem) -> str:
     name = html.escape(item.name)
     if item.max_rank is None:
         return name
-    return f'{name} <span style="color:#9ba0b5; font-size:13px; font-weight:400">max rank {item.max_rank}</span>'
+    return f'{name} <span style="color:#8fa3c2; font-size:13px; font-weight:400">max rank {item.max_rank}</span>'
 
 
 class MarketWindow(QWidget):
@@ -305,7 +305,7 @@ class MarketWindow(QWidget):
             self._label_ranks(rank_counts(rows))
         self.rows = rows
         self.table.setRowCount(len(rows))
-        dim = QColor(110, 116, 135)
+        dim = QColor(104, 118, 145)
         for r, s in enumerate(rows):
             cells = [s.ingame_name, STATUS_LABEL.get(s.status, s.status), "" if s.rank is None else str(s.rank),
                      str(s.platinum), str(s.quantity), str(s.reputation)]
