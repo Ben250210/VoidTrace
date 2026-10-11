@@ -139,10 +139,11 @@ class RivenCatalog:
         return stat.name if stat else slug.replace("_", " ").title()
 
     def riven_title(self, auction: RivenAuction) -> str:
-        """"Kulstar Concitron", as the game and the site show it."""
+        """"Ocucor Sati-toxitio", as the game shows it: only the first letter of the riven name is a
+        capital (.title() would give "Sati-Toxitio")."""
         weapon = self.by_weapon.get(auction.weapon)
         weapon_name = weapon.name if weapon else auction.weapon.replace("_", " ").title()
-        return f"{weapon_name} {auction.name.title()}".strip()
+        return f"{weapon_name} {auction.name[:1].upper()}{auction.name[1:]}".strip()
 
     def format_attr(self, attr: RivenAttr) -> str:
         """"+108.2% Critical Chance", "x1.08 Damage to Corpus", "-6% Zoom"."""
@@ -262,11 +263,16 @@ def sort_auctions(auctions: Sequence[RivenAuction]) -> list[RivenAuction]:
                                            -a.reputation))
 
 
+WHISPER_TAG = "(warframe.market through VoidTrace)"
+
+
 def riven_whisper(auction: RivenAuction, title: str) -> str:
-    """Message for the player to paste in game chat, in the style warframe.market uses for items."""
-    price = auction.price
-    return (f'/w {auction.seller} Hi! I want to buy: "{title}" riven for {price} platinum. (warframe.market)'
-            if price is not None else f'/w {auction.seller} Hi! I am interested in your "{title}" riven. (warframe.market)')
+    """Message for the player to paste in game chat. warframe.market itself copies only "/w Name Hi!"
+    for rivens; this names the riven and price (like riven.market does), so the seller knows which
+    one you mean."""
+    if auction.price is None:
+        return f"/w {auction.seller} Hi! I'm interested in your {title} riven. {WHISPER_TAG}"
+    return f"/w {auction.seller} Hi! I'd like to buy your {title} riven for {auction.price} platinum. {WHISPER_TAG}"
 
 
 class RivenService:

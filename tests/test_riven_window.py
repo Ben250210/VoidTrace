@@ -90,7 +90,8 @@ def test_search_a_weapon_and_copy_a_whisper(qapp):
     assert "multishot" in stats and "range" not in stats
     panel.copy_row(0)
     first = panel.auctions[0]
-    assert QApplication.clipboard().text().startswith(f'/w {first.seller} Hi! I want to buy: "Kulstar ')
+    assert QApplication.clipboard().text().startswith(f"/w {first.seller} Hi! I'd like to buy your Kulstar ")
+    assert QApplication.clipboard().text().endswith("(warframe.market through VoidTrace)")
     assert first.seller in window.toast.text()
     window.shutdown()
 

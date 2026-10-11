@@ -72,8 +72,24 @@ def test_search_path():
 
 def test_whisper():
     a = auction(120, ["critical_chance"], seller="Kosmo")
-    assert rivens.riven_whisper(a, "Kulstar Concitron") == (
-        '/w Kosmo Hi! I want to buy: "Kulstar Concitron" riven for 120 platinum. (warframe.market)')
+    assert rivens.riven_whisper(a, "Ocucor Sati-toxitio") == (
+        "/w Kosmo Hi! I'd like to buy your Ocucor Sati-toxitio riven for 120 platinum. "
+        "(warframe.market through VoidTrace)")
+
+
+def test_whisper_for_bid_only_auction():
+    a = RivenAuction(id="x", weapon="kulstar", name="test", attrs=(), mr=8, rolls=0, rank=0, polarity="madurai",
+                     buyout=None, starting=0, top_bid=None, direct=False, seller="Kosmo", status="ingame",
+                     reputation=0)
+    a = RivenAuction(**{**a.__dict__, "starting": None})
+    assert rivens.riven_whisper(a, "Kulstar Test") == \
+        "/w Kosmo Hi! I'm interested in your Kulstar Test riven. (warframe.market through VoidTrace)"
+
+
+def test_riven_title_keeps_the_game_casing(catalog):
+    a = auction(10, ["critical_chance"])
+    a = RivenAuction(**{**a.__dict__, "name": "sati-toxitio"})
+    assert catalog.riven_title(a) == "Kulstar Sati-toxitio"
 
 
 def test_sort_puts_tradeable_sellers_first():
