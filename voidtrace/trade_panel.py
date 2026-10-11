@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QRadioButton,
     QSpinBox,
+    QToolButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -45,10 +46,55 @@ QPushButton:hover { background: #343a55; }
 QPushButton#primary { background: #d9b45c; color: #14161f; border: none; font-weight: 600; }
 QPushButton#primary:hover { background: #e6c472; }
 QPushButton#danger { color: #f08a6e; }
-QSpinBox { background: #171a26; border: 1px solid #2a2f45; border-radius: 4px; padding: 4px; }
+QSpinBox { background: #171a26; border: 1px solid #2a2f45; border-radius: 4px; padding: 4px 6px; }
+QToolButton#step { background: #2a2f45; border: 1px solid #3a4160; border-radius: 4px; font-weight: 700;
+                   min-width: 26px; min-height: 24px; }
+QToolButton#step:hover { background: #3a4160; }
+QToolButton#step:pressed { background: #d9b45c; color: #14161f; }
+QRadioButton::indicator, QCheckBox::indicator { width: 14px; height: 14px; }
+QRadioButton::indicator { border-radius: 8px; border: 2px solid #6b7190; background: #0f1119; }
+QRadioButton::indicator:hover { border-color: #d9b45c; }
+QRadioButton::indicator:checked { border: 2px solid #d9b45c;
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+                                stop:0 #d9b45c, stop:0.5 #d9b45c, stop:0.6 #0f1119, stop:1 #0f1119); }
 """
 TOP_COLUMNS = ["Player", "Rep", "Price", "Rank", "Qty"]
 STATUS_DOT = {"ingame": QColor(124, 201, 156), "online": QColor(143, 163, 255)}
+
+
+class Stepper(QWidget):
+    """A number box with its own - and + buttons.
+
+    The dark theme's QSpinBox styling made Qt misplace the built-in arrows' click areas: the up
+    arrow drew in one place and listened in another, so it never responded. Typing and the mouse
+    wheel still work on the box itself. Mirrors QSpinBox's value()/setValue()/valueChanged.
+    """
+
+    def __init__(self, minimum: int, maximum: int, value: int, step: int = 1) -> None:
+        super().__init__()
+        self.box = QSpinBox(minimum=minimum, maximum=maximum, value=value)
+        self.box.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+        self.box.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.box.setMinimumWidth(64)
+        self.minus = QToolButton(text="\u2212", objectName="step")
+        self.plus = QToolButton(text="+", objectName="step")
+        for button, delta in ((self.minus, -step), (self.plus, step)):
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setAutoRepeat(True)  # hold to keep stepping
+            button.clicked.connect(lambda _=False, d=delta: self.box.setValue(self.box.value() + d))
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        layout.addWidget(self.minus)
+        layout.addWidget(self.box)
+        layout.addWidget(self.plus)
+        self.valueChanged = self.box.valueChanged
+
+    def value(self) -> int:
+        return self.box.value()
+
+    def setValue(self, value: int) -> None:  # noqa: N802 (Qt naming)
+        self.box.setValue(value)
 
 
 def _table(columns: list[str]) -> QTableWidget:
@@ -132,7 +178,10 @@ class PostOrderPanel(QWidget):
         self.side.addItem("Sell", "sell")
         self.side.addItem("Buy", "buy")
         self.rank = QComboBox()
-        self.quantity = QSpinBox(minimum=1, maximum=999, value=1)
+        # Grow with "Maxed rank" instead of cutting it to "Maxed r" / "Ma...nk".
+        self.rank.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self.rank.view().setTextElideMode(Qt.TextElideMode.ElideNone)
+        self.quantity = Stepper(1, 999, 1)
         self.visible = QCheckBox("Visible")
         self.visible.setChecked(True)
 
@@ -143,12 +192,12 @@ class PostOrderPanel(QWidget):
         self.modes = QButtonGroup(self)
         for b in (self.mode_match, self.mode_offset, self.mode_custom):
             self.modes.addButton(b)
-        self.offset = QSpinBox(minimum=-1000, maximum=1000, value=-1)
-        self.offset.setPrefix("")
-        self.custom = QSpinBox(minimum=1, maximum=100000, value=10)
+        self.offset = Stepper(-1000, 1000, -1)
+        self.custom = Stepper(1, 100000, 10)
         self.price_label = QLabel()
         self.price_label.setObjectName("title")
         self.post = QPushButton("Post", objectName="primary")
+        self.post.setCursor(Qt.CursorShape.PointingHandCursor)
         self.result = QLabel(objectName="toast")
         self.result.setWordWrap(True)
 
@@ -207,6 +256,8 @@ class PostOrderPanel(QWidget):
             # Default to max rank, like warframe.market; follow the rank chosen in the seller list.
             self.rank.setCurrentIndex(item.max_rank if rank is None else rank)
         self.rank.setVisible(item is not None and item.max_rank is not None)
+        view = self.rank.view()
+        view.setMinimumWidth(view.sizeHintForColumn(0) + 24)
         self.rank.blockSignals(False)
         self.result.setText("")
         self.refresh()

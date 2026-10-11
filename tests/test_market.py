@@ -326,3 +326,31 @@ def test_my_orders_lists_and_deletes(qapp):
     panel.delete(panel.orders[0])
     _wait(qapp, lambda: http.orders == [] and panel.table.rowCount() == 0)
     window.shutdown()
+
+
+def test_offset_plus_and_minus_buttons_both_work(qapp):
+    # Live test: the styled spin box's up arrow never responded; the steppers use real buttons.
+    window, http = _signed_in_window(qapp, {"sell": [_top_order("a", 20)], "buy": []})
+    window.open_item("necramech_fury")
+    panel = window.post_panel
+    _wait(qapp, lambda: panel.sell_table.rowCount() == 1)
+    panel.mode_offset.setChecked(True)
+    panel.offset.setValue(-3)
+    panel.offset.plus.click()
+    panel.offset.plus.click()
+    assert panel.offset.value() == -1 and panel.price() == 19
+    panel.offset.minus.click()
+    assert panel.offset.value() == -2 and "18p" in panel.price_label.text()
+    panel.quantity.plus.click()
+    assert panel.quantity.value() == 2
+    window.shutdown()
+
+
+def test_post_rank_box_fits_maxed_rank(qapp):
+    window, _ = _signed_in_window(qapp, {"sell": [], "buy": []})
+    window.open_item("necramech_fury")
+    box = window.post_panel.rank
+    assert box.currentText() == "Maxed rank"
+    width = box.fontMetrics().horizontalAdvance("Maxed rank")
+    assert box.sizeHint().width() > width and box.view().minimumWidth() >= width
+    window.shutdown()
