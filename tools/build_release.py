@@ -1,15 +1,17 @@
 """Build the Windows release: a folder with VoidTrace.exe (no Python needed) plus a bundled Tesseract,
 zipped for a GitHub Release.
 
-    python tools/build_release.py
+    python tools/build_release.py                    # -> dist/
+    python tools/build_release.py --out dist-rivens  # a test build beside the released one
 
 Needs: pip install pyinstaller, and Tesseract installed at the default path (only the parts OCR needs
 are copied: tesseract.exe, its DLLs, English and orientation data, about 15 MB).
-Output: dist/VoidTrace/ and dist/VoidTrace-<version>-windows.zip
+Output: <out>/VoidTrace/ and <out>/VoidTrace-<version>-windows.zip (out defaults to dist)
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import shutil
 import subprocess
@@ -26,6 +28,13 @@ TESSERACT_DIR = Path(os.environ.get("TESSERACT_DIR", r"C:\Program Files\Tesserac
 BUILD = ROOT / "build"
 DIST = ROOT / "dist"
 APP = DIST / "VoidTrace"
+
+
+def set_output(folder: Path) -> None:
+    """Build into `folder` instead of dist/ (the folder and its VoidTrace/ app dir)."""
+    global DIST, APP
+    DIST = folder if folder.is_absolute() else ROOT / folder
+    APP = DIST / "VoidTrace"
 
 HOW_TO_USE = f"""VoidTrace {__version__}
 =================
@@ -44,6 +53,11 @@ MARKET
   Ctrl+Shift+M (or click the tray icon) opens the market window: search any item, click a seller
   to copy the whisper, paste it in game chat. Sign in to Warframe.Market there to post and manage
   your own orders (your password is not saved).
+
+RIVENS
+  Ctrl+Shift+R (or tray > Rivens) opens the riven window. With a riven open in the game's Item
+  Details view, Ctrl+Shift+R reads it off the screen and prices it. Find rivens to buy (filter by
+  stats, curse, clean or rolled), price-check yours, and sell or manage your riven auctions.
 
 SOMETHING WRONG?
   Right-click the tray icon > "Run self-test". It checks OCR, the internet connection and the game log.
@@ -151,6 +165,9 @@ def folder_size(path: Path) -> float:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Build the VoidTrace Windows release")
+    parser.add_argument("--out", type=Path, default=Path("dist"), help="output folder (default: dist)")
+    set_output(parser.parse_args().out)
     icon = make_icon()
     run_pyinstaller(icon)
     copy_tesseract()

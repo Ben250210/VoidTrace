@@ -1,6 +1,6 @@
 """VoidTrace: read-only Warframe companion."""
 
-__version__ = "1.1.0.dev0"
+__version__ = "1.1.0b1"
 
 from .log_watcher import (
     DebouncedFilter,
