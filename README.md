@@ -99,11 +99,16 @@ Sign in from the market window (**Sign in to Warframe.Market**) to post and mana
   "Edit order" panel), then post at *match lowest*, *lowest +/- offset* (e.g. -1 to undercut) or a
   custom price. Your own listing is ignored when matching. Buying matches the highest buyer instead.
 - **My orders** tab: your live orders, with *Match lowest* to reprice and *Delete*.
+- **After a trade**: when a trade goes through in game, VoidTrace reads it from the game log and
+  lowers the matching order by the amount traded (items you gave lower your sell orders, items you
+  received your buy orders), or removes it when none are left. A card at the top right shows what
+  changed, with **Undo** for 10 seconds. Turn it off with tray > **Update orders after trades**.
 
 Warframe.Market has no OAuth for outside apps yet, so sign-in uses the same email + password login
 as the website (`POST /v1/auth/signin`), and orders go to the v2 order endpoints with the session
 token. The password is sent only to api.warframe.market and never stored; the token is kept in
-Windows Credential Manager (`keyring`) and removed by **Sign out**. Nothing is posted automatically.
+Windows Credential Manager (`keyring`) and removed by **Sign out**. Nothing is posted automatically;
+the only automatic change is lowering an order after a trade (above).
 
 ## Rivens
 

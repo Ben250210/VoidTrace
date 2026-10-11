@@ -2,6 +2,7 @@
 
     accent             the theme's accent colour (see theme.py)
     disclaimer_ok      the user clicked "I understand" on the first-run warning
+    trade_updates      lower / remove your Warframe.Market orders after a trade (default on)
 """
 
 from __future__ import annotations

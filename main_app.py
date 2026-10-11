@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import QApplication, QColorDialog, QMenu, QMessageBox, QSys
 
 from voidtrace.cv_cleaner import TesseractNotFound, capture_screen, warframe_is_foreground
 from voidtrace.debug_log import DebugChannelBusy, DebugLogSource
-from voidtrace import app_support, disclaimer, hotkey, settings, theme
+from voidtrace import app_support, disclaimer, hotkey, settings, theme, trade_toast
 from voidtrace.icons import voidtrace_logo
 from voidtrace.items import load_catalog, load_items
 from voidtrace.market_window import MarketWindow
@@ -144,7 +144,7 @@ def app_icon() -> QIcon:
 
 
 def make_tray(app: QApplication, open_market, game_log_status=lambda: None, open_rivens=None,
-              toggle_riven_popup=None) -> QSystemTrayIcon:
+              toggle_riven_popup=None, toggle_trade_updates=None) -> QSystemTrayIcon:
     tray = QSystemTrayIcon(app_icon(), app)
     tray.setToolTip("VoidTrace")
     menu = QMenu()
@@ -156,6 +156,11 @@ def make_tray(app: QApplication, open_market, game_log_status=lambda: None, open
         popup_action.setCheckable(True)
         popup_action.setChecked(True)
         popup_action.toggled.connect(toggle_riven_popup)
+    if toggle_trade_updates is not None:
+        trades_action = menu.addAction("Update orders after trades")
+        trades_action.setCheckable(True)
+        trades_action.setChecked(trade_toast.enabled())
+        trades_action.toggled.connect(toggle_trade_updates)
     add_accent_menu(menu)
     menu.addAction("Run self-test", lambda: show_self_test(game_log_status()))
     menu.addAction("Open log folder", lambda: _open_folder(app_support.log_path().parent))
@@ -376,6 +381,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     overlay.card_clicked.connect(open_card)
     watcher = None
 
+    def refresh_my_orders() -> None:
+        if market.isVisible():
+            market.orders_panel.refresh()
+
+    trades = trade_toast.TradeTracker(market.account, market.catalog, trade_toast.TradeToast(screen.geometry()),
+                                      on_orders_changed=refresh_my_orders)
+
+    def toggle_trade_updates(on: bool) -> None:
+        settings.put(trade_toast.SETTING, on)
+        log.info("order updates after trades %s", "on" if on else "off")
+
     def game_log_status() -> Optional[str]:
         if watcher is None:
             return None
@@ -384,7 +400,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return ("FAIL: using the slower log file: another program (WFInfo, Overwolf, DebugView) "
                 "was reading the game's log when VoidTrace started")
 
-    tray = make_tray(app, open_market, game_log_status, open_rivens, toggle_riven_popup)
+    tray = make_tray(app, open_market, game_log_status, open_rivens, toggle_riven_popup, toggle_trade_updates)
     riven_watcher.start()
     tray.showMessage("VoidTrace is running",
                      "Prices appear on relic reward screens (Borderless Fullscreen). Ctrl+Shift+M opens the market.",
@@ -412,7 +428,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         controller.run_once()
     else:
         path = args.path or default_log_path()
-        watcher = LogWatcher(path, on_event=controller.on_log_event, source=make_line_source(args.source, path))
+        watcher = LogWatcher(path, on_event=controller.on_log_event, source=make_line_source(args.source, path),
+                             on_line=trades.feed)
         watcher.start()
         log.info("watching for relic reward screens")
 
@@ -425,6 +442,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         market.shutdown()
         riven_watcher.stop()
         riven_assistant.shutdown()
+        trades.shutdown()
         if rivens is not None:
             rivens.shutdown()
         hotkey.unregister()

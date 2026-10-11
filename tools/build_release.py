@@ -52,7 +52,8 @@ START
 MARKET
   Ctrl+Shift+M (or click the tray icon) opens the market window: search any item, click a seller
   to copy the whisper, paste it in game chat. Sign in to Warframe.Market there to post and manage
-  your own orders (your password is not saved).
+  your own orders (your password is not saved). While signed in, a finished trade lowers or removes
+  the matching order by itself, with an Undo button (tray > "Update orders after trades" to turn off).
 
 RIVENS
   Ctrl+Shift+R (or tray > Rivens) opens the riven window. With a riven open in the game's Item

@@ -185,6 +185,7 @@ class LogWatcher:
     The source is a LogTailer (EE.log) or a DebugLogSource (live debug output); anything with
     poll() -> list[str] and close() works. An open trigger is dropped as stale when the same batch
     already contains the screen's close, or when it is STALE_TRIGGER_S behind the batch's newest line.
+    `on_line`, when given, also receives every line (the trade reader uses it).
     """
 
     def __init__(
@@ -195,6 +196,7 @@ class LogWatcher:
         poll_interval: float = 0.05,
         clock: Callable[[], float] = time.monotonic,
         source=None,
+        on_line: Optional[Callable[[str], None]] = None,
     ) -> None:
         if source is None:
             source = LogTailer(path, poll_interval=poll_interval, start_at_eof=True)
@@ -202,6 +204,7 @@ class LogWatcher:
         self.source = source  # read by the self-test to report which log is in use
         self._idle_sleep = 0.0 if getattr(source, "blocks", False) else poll_interval
         self._on_event = on_event
+        self._on_line = on_line
         self._filter = DebouncedFilter(debounce)
         self._clock = clock
         self._stop = threading.Event()
@@ -235,6 +238,11 @@ class LogWatcher:
         newest = max(stamps) if stamps else None
         for i, line in enumerate(batch):
             self.lines_seen += 1
+            if self._on_line is not None:
+                try:
+                    self._on_line(line)
+                except Exception:
+                    log.exception("on_line callback raised")
             if is_reward_screen_close(line):
                 kind = "close"
             elif self._filter.accept(line, self._clock()):
