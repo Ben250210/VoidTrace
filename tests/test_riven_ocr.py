@@ -53,6 +53,11 @@ EXPECTED = {
     "akvasto_acri-decitin": ("akvasto", "acri-decitin", 16, 0, 8,
                              [("status_duration", 87.6, True), ("magazine_capacity", 42.4, True),
                               ("critical_damage", 87.5, True)]),
+    # The same Burston on the Cycle screen, fitted to Burston Prime (16:39): its values are shown for
+    # Burston Prime (disposition 1.35, not Burston's 1.45), so they are 0.93x the Item Details ones.
+    "burston_sati-visicon_cycle_prime": ("burston", "sati-visicon", 9, 3, 8,
+                                         [("damage_vs_grineer", 1.44, True), ("base_damage_/_melee_damage", 162.7, True),
+                                          ("multishot", 90.1, True)]),
     # Popup live test (16:07): two-line title and four stats sit higher; 3 rolls ("CYCLE FOR 1,400").
     "akmagnus_sci-critaata": ("akmagnus", "sci-critaata", 11, 3, 8,
                               [("base_damage_/_melee_damage", 290.6, True), ("slash_damage", 162.3, True),
@@ -63,7 +68,8 @@ POLARITY = {"sobek_satidra": "madurai", "burston_sati-visicon": "naramon", "hiko
             "balla_acriata": "madurai", "dread_manti-vexiata": "madurai", "balla_acrido": "naramon",
             "ceramic_dagger_manti-parades": "madurai", "burston_live": "naramon",
             "efv_8_mars_veximag": "madurai", "euphona_prime_croni-vexitron": "vazarin",
-            "akvasto_acri-decitin": "vazarin", "akmagnus_sci-critaata": "madurai"}
+            "akvasto_acri-decitin": "vazarin", "akmagnus_sci-critaata": "madurai",
+            "burston_sati-visicon_cycle_prime": "naramon"}
 
 
 @pytest.fixture(scope="module")
@@ -79,6 +85,10 @@ def screen(key: str) -> np.ndarray:
     x, y = meta["offset"]
     frame = np.zeros((h, w, 3), dtype=np.uint8)
     frame[y:y + card.shape[0], x:x + card.shape[1]] = card
+    if "fits_offset" in meta:  # the Cycle screen's "FITS IN" weapon name, stored separately
+        fits = cv2.imread(str(SCREENS / f"{key}_fits.png"))
+        fx, fy = meta["fits_offset"]
+        frame[fy:fy + fits.shape[0], fx:fx + fits.shape[1]] = fits
     return frame
 
 
@@ -114,7 +124,7 @@ def test_stat_line_parsing_survives_ocr_slips():
 @pytest.mark.parametrize("size, allowed_misses", [((1920, 1200), 0), ((1680, 1050), 1)])
 def test_reads_the_same_cards_on_smaller_screens(size, allowed_misses, catalog):
     # Downscaled screenshots are a harsher test than the game rendering natively at that size.
-    # At 1680x1050 the live Burston loses its MR, rolls and a 6 (96.8 -> 90.8): 11 of 12 exact.
+    # At 1680x1050 the live Burston loses its MR, rolls and a 6 (96.8 -> 90.8): 12 of 13 exact.
     misses = []
     for key, (weapon, name, mr, rolls, rank, attrs) in EXPECTED.items():
         d = read_riven(cv2.resize(screen(key), size, interpolation=cv2.INTER_AREA), catalog).draft
@@ -146,3 +156,13 @@ def test_rolls_from_the_cycle_price():
     assert rolls_from_cost("CYCLE FOR 1,400") == 3
     assert rolls_from_cost("CYCLE FOR 3500") == 9  # 9 or more: the price stops rising
     assert rolls_from_cost("CYCLE FOR") is None
+
+
+@pytest.mark.skipif(find_tesseract() is None, reason="Tesseract not installed")
+def test_cycle_screen_values_are_graded_for_the_weapon_they_fit(catalog):
+    read = read_riven(screen("burston_sati-visicon_cycle_prime"), catalog)
+    assert (read.draft.shown_for, read.draft.shown_disposition) == ("Burston Prime", 1.35)
+    weapon = rivens.grading_weapon(catalog, read.draft)
+    letters = [rivens.grade_letter(r, a.positive) for a, r in
+               zip(read.draft.attrs, rivens.attr_rolls(catalog, weapon, read.draft.attrs, read.draft.rank))]
+    assert letters == ["B-", "B-", "B"]  # as in Item Details and AlecaFrame; Burston's own 1.45 gave 0-10%

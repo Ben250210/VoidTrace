@@ -63,14 +63,21 @@ def main() -> int:
             stats[e["tag"]] = {"base": value["value"], "label": label(value.get("locTag", "")),
                                "prefix": e.get("prefixTag", ""), "suffix": e.get("suffixTag", "")}
         out[kind] = stats
+    # Every weapon's own riven disposition, variants included (Burston 1.45, Burston Prime 1.35):
+    # the Cycle screen shows a riven's values for the weapon it fits, and Warframe.Market only lists
+    # the base weapons.
+    weapons = json.loads(requests.get(MANIFEST + index["ExportWeapons_en.json"], timeout=60).text,
+                         strict=False)["ExportWeapons"]
+    dispositions = {w["name"]: w["omegaAttenuation"] for w in weapons if w.get("omegaAttenuation") and w.get("name")}
     missing = set(TYPES.values()) - set(out)
     if missing:
         print(f"export has no riven data for: {sorted(missing)}", file=sys.stderr)
         return 1
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps({"source": index["ExportUpgrades_en.json"], "types": out}, indent=1, sort_keys=True),
-                   encoding="utf-8")
-    print(f"wrote {OUT} ({sum(len(v) for v in out.values())} stats over {len(out)} riven types)")
+    OUT.write_text(json.dumps({"source": index["ExportUpgrades_en.json"], "types": out,
+                               "dispositions": dispositions}, indent=1, sort_keys=True), encoding="utf-8")
+    print(f"wrote {OUT} ({sum(len(v) for v in out.values())} stats over {len(out)} riven types, "
+          f"{len(dispositions)} weapon dispositions)")
     return 0
 
 

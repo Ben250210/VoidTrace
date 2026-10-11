@@ -7,8 +7,10 @@ endpoints: weapons and stats from v2 (/riven/weapons, /riven/attributes), auctio
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import json
+import re
 import logging
 import threading
 import time
@@ -117,6 +119,10 @@ class RivenDraft:
     rolls: int = 0
     rank: int = 0
     polarity: str = "madurai"
+    # The Cycle screen shows the values for the weapon the riven "fits in" (Burston Prime), whose
+    # riven strength can differ from the riven's own weapon (Burston): grades must use that one.
+    shown_for: str = ""
+    shown_disposition: Optional[float] = None
 
     @property
     def positives(self) -> list[str]:
@@ -406,6 +412,36 @@ def load_bases() -> dict[str, dict]:
         return {}
 
 
+@lru_cache(maxsize=1)
+def load_dispositions() -> dict[str, float]:
+    """Every weapon's riven disposition by name, variants included (Warframe.Market lists only the
+    base weapon of each riven family)."""
+    try:
+        return json.loads(BASES_PATH.read_text(encoding="utf-8")).get("dispositions", {})
+    except (OSError, ValueError):
+        return {}
+
+
+def match_variant(text: str) -> Optional[tuple[str, float]]:
+    """("Burston Prime", 1.35) from OCR text like '" Burston Prime', or None."""
+    from rapidfuzz import fuzz, process
+
+    cleaned = " ".join(re.findall(r"[A-Za-z0-9\-]+", text))
+    table = load_dispositions()
+    if len(cleaned) < 3 or not table:
+        return None
+    hit = process.extractOne(cleaned.upper(), {n: n.upper() for n in table}, scorer=fuzz.ratio)
+    return (hit[2], table[hit[2]]) if hit and hit[1] >= 85 else None
+
+
+def grading_weapon(catalog: RivenCatalog, draft: RivenDraft) -> Optional[RivenWeapon]:
+    """The weapon to grade a draft against: its own, with the disposition its values were shown for."""
+    weapon = catalog.by_weapon.get(draft.weapon)
+    if weapon is not None and draft.shown_disposition:
+        weapon = dataclasses.replace(weapon, disposition=draft.shown_disposition)
+    return weapon
+
+
 def riven_kind(weapon: RivenWeapon) -> str:
     """Which riven a weapon takes in game. Warframe.Market calls Euphona Prime a "shotgun", but as a
     secondary it takes a pistol riven: its Fire Rate only fits the pistol base value (roll 0.93 vs 0.78)."""
@@ -463,6 +499,24 @@ def grade(roll: Optional[float]) -> Optional[int]:
     if roll is None:
         return None
     return round(min(1.0, max(0.0, (roll - ROLL_MIN) / (ROLL_MAX - ROLL_MIN))) * 100)
+
+
+# Letter grades as other riven tools show them, by how far the roll is from the average (1.0):
+# matched AlecaFrame on all 6 stats checked (Hikou A/A+/A+, Burston B-/B-/B).
+LETTERS = ((7.5, "A+"), (5.0, "A"), (2.5, "A-"), (0.0, "B+"), (-2.5, "B"), (-5.0, "B-"), (-7.5, "C+"))
+
+
+def grade_letter(roll: Optional[float], positive: bool = True) -> Optional[str]:
+    """"A+" (top of the range) ... "B+" (average) ... "C" (bottom). For a curse, a milder one rates higher."""
+    if roll is None:
+        return None
+    deviation = (roll - 1) * 100 if positive else (1 - roll) * 100
+    return next((letter for cut, letter in LETTERS if deviation >= cut), "C")
+
+
+def grade_from_percent(percent: Optional[int]) -> Optional[str]:
+    """The letter for a 0-100 grade (0.9-1.1 roll), e.g. a listing's or a riven's overall grade."""
+    return None if percent is None else grade_letter(0.9 + percent / 500)
 
 
 def riven_grade(catalog: RivenCatalog, weapon: Optional[RivenWeapon], attrs: Sequence[RivenAttr],

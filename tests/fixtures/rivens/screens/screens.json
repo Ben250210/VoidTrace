@@ -130,5 +130,20 @@
    686
   ],
   "source": "Screenshot 2026-10-11 160757.png (Cycle screen, popup live test)"
+ },
+ "burston_sati-visicon_cycle_prime": {
+  "screen": [
+   2559,
+   1599
+  ],
+  "offset": [
+   1072,
+   686
+  ],
+  "fits_offset": [
+   2152,
+   1289
+  ],
+  "source": "Screenshot 2026-10-11 163957.png (Cycle screen, fits in Burston Prime; AlecaFrame overlay not stored)"
  }
 }

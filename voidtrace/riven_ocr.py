@@ -16,6 +16,7 @@ Tuned on 7 real cards at 2560x1600 (tests/fixtures/rivens/screens); other resolu
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -34,6 +35,7 @@ from .rivens import (
     RivenWeapon,
     buffs_from_name,
     expected_value,
+    match_variant,
     shown_value,
 )
 from .text_cleaner import match_score
@@ -55,13 +57,15 @@ class Layout:
     polarity: tuple[int, int, int, int]
     card_scale: float = 1.0                               # card size relative to Item Details
     cost: Optional[tuple[int, int, int, int]] = None      # "CYCLE FOR 900" (Cycle screen only)
+    fits: Optional[tuple[int, int, int, int]] = None      # "FITS IN" weapon name (Cycle screen only)
 
 
 ITEM_DETAILS = Layout("Item Details", TEXT_BOX, BAR_BOX, DRAIN_BOX, POLARITY_BOX)
 # Inventory > Mods > a riven > Cycle: where most players look at their rivens. The card is about
 # 1.25x bigger and lower, and its bar shows no rolls count; the Kuva price of the next cycle does.
 CYCLE = Layout("Cycle", text=(-140, 106, 280, 178), bar=(-110, 286, 220, 34), drain=(90, -62, 40, 32),
-               polarity=(122, -60, 32, 30), card_scale=1.25, cost=(-140, 406, 280, 32))
+               polarity=(122, -60, 32, 30), card_scale=1.25, cost=(-140, 406, 280, 32),
+               fits=(660, 372, 200, 38))
 LAYOUTS = (ITEM_DETAILS, CYCLE)
 # Kuva for the next cycle, by cycles already done; from the 10th on it stays at 3500.
 CYCLE_COSTS = (900, 1000, 1200, 1400, 1700, 2000, 2350, 2750, 3150, 3500)
@@ -91,6 +95,7 @@ class RivenRead:
     warnings: list[str] = field(default_factory=list)
     raw: str = ""
     alternates: dict = field(default_factory=dict)  # slug -> other readings of its number
+    fits_text: str = ""
 
     @property
     def ok(self) -> bool:
@@ -249,13 +254,16 @@ NUMBER = re.compile(r"\d{1,4}(?:[.,]\d{1,3})?")
 
 def number_variants(line: str) -> list[float]:
     """Other ways to read the number at the start of a stat line."""
-    m = re.search(r"[+\-\u2212\u2013xX\u00d7]?\s?\d", line)
+    m = re.search(r"[+\-\u2212\u2013xX\u00d7]?\s?[\]|lI]?\d", line)
     if not m:
         return []
     start = m.start() + (1 if line[m.start()] in "xX×" else 0)  # "x1.47": the x is the sign, not a letter
-    span = re.match(r"[^A-Za-z]*", line[start:]).group()
+    span = re.match(r"(?:[^A-Za-z]|[lI](?=[\d.,/]))*", line[start:]).group()
+    # A leading 1 also comes back as "]", "|", "l" or "I" ("+]62.7%" for +162.7%, at 1680x1050).
+    ones = span.translate(str.maketrans("]|lI", "1111"))
     found = []
-    for variant in (span.replace("/", "7"), span.replace("/", ""), span.replace("/7", "7").replace("/", "7")):
+    for variant in (span.replace("/", "7"), span.replace("/", ""), span.replace("/7", "7").replace("/", "7"),
+                    ones, ones.replace("/", "7"), ones.replace("/", "")):
         n = NUMBER.search(variant.lstrip("+-\u2212\u2013xX\u00d7 "))
         if n:
             found.append(float(n.group().replace(",", ".")))
@@ -363,6 +371,11 @@ def _read_layout(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float, layo
     rank = min(8, max(0, drain - BASE_DRAIN)) if drain else 0
     polarity = _mode([r[0].draft.polarity or None for r in reads])
     weapon = catalog.by_weapon.get(title[0])
+    # On the Cycle screen the values are for the weapon the riven fits in (Burston Prime, 1.35), not
+    # the riven's own (Burston, 1.45): range checks and grades use that disposition.
+    variant = _mode([match_variant(r[0].fits_text) for r in reads if r[0].fits_text])
+    if weapon is not None and variant is not None:
+        weapon = dataclasses.replace(weapon, disposition=variant[1])
     n_buffs = sum(pos for _, pos in shape)
     has_curse = any(not pos for _, pos in shape)
     unsure: list[str] = []
@@ -404,7 +417,8 @@ def _read_layout(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float, layo
     if polarity is None:
         warnings.append("Polarity not read: set it by hand.")
     draft = RivenDraft(weapon=title[0], name=title[1], attrs=attrs, mr=mr if mr is not None else 8,
-                       rolls=rolls or 0, rank=rank, polarity=polarity or "madurai")
+                       rolls=rolls or 0, rank=rank, polarity=polarity or "madurai",
+                       shown_for=variant[0] if variant else "", shown_disposition=variant[1] if variant else None)
     return RivenRead(draft, warnings, best.raw)
 
 
@@ -481,4 +495,7 @@ def _read_once(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float, up: fl
     polarity = read_polarity(crop(frame, ref_box(frame, layout.polarity, ui_scale)), up)
     draft = RivenDraft(weapon=weapon.slug if weapon else "", name=name, attrs=tuple(attrs),
                        polarity=polarity or "")
-    return RivenRead(draft, warnings, raw, alternates), mr, rolls, drain
+    fits_text = ""
+    if layout.fits is not None:
+        fits_text = ocr(binarize(crop(frame, ref_box(frame, layout.fits, ui_scale)), up), psm=7).strip()
+    return RivenRead(draft, warnings, raw, alternates, fits_text), mr, rolls, drain

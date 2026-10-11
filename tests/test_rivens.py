@@ -275,3 +275,11 @@ def test_price_check_keeps_all_listings_when_too_few_rolled_alike(catalog):
     check = price_check(listings, ["puncture_damage", "heat_damage", "damage_vs_corpus"], "status_duration",
                         catalog=catalog, my_grade=92)
     assert not check.similar_rolls and check.estimate == 13  # one strong listing is too few to price from
+
+
+def test_letter_grades_match_another_riven_tool():
+    # AlecaFrame's grades for the user's Hikou and Burston stats
+    rolls = {1.071: "A", 1.083: "A+", 1.149: "A+", 0.96: "B-", 0.974: "B-", 0.989: "B"}
+    assert {r: rivens.grade_letter(r) for r in rolls} == rolls
+    assert rivens.grade_letter(1.02, positive=False) == "B"   # a curse 2% above average rates lower
+    assert rivens.grade_from_percent(100) == "A+" and rivens.grade_from_percent(0) == "C"

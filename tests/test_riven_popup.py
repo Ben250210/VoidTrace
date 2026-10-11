@@ -21,7 +21,7 @@ from voidtrace.rivens import PriceCheck, RivenAttr, RivenDraft
 
 FIXTURES = Path(__file__).parent / "fixtures" / "rivens"
 CYCLE_CARDS = {"efv_8_mars_veximag", "euphona_prime_croni-vexitron", "akvasto_acri-decitin",
-               "akmagnus_sci-critaata"}
+               "akmagnus_sci-critaata", "burston_sati-visicon_cycle_prime"}
 
 
 @pytest.fixture(scope="module")

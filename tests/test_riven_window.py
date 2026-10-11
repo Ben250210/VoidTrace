@@ -253,7 +253,7 @@ def test_grades_show_beside_each_value(qapp):
     cc = rivens.expected_value(window.catalog, window.catalog.by_weapon["kulstar"], "critical_chance", True, 2, False, 0)
     panel.rows[0].value.setValue(round(cc * 1.1, 2))   # the best possible crit chance roll
     panel.rows[1].value.setValue(500.0)                # impossible multishot: flagged, not graded
-    assert panel.rows[0].grade.text() in ("99%", "100%")
+    assert panel.rows[0].grade.text() == "A+"
     assert panel.rows[1].grade.text() == "?"
     assert panel.table.horizontalHeaderItem(6).text() == "Grade"
     window.shutdown()
