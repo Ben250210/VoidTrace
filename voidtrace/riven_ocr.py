@@ -27,7 +27,15 @@ import numpy as np
 from rapidfuzz import fuzz, process
 
 from .cv_cleaner import Box, crop, ocr, screen_scaling
-from .rivens import RivenAttr, RivenCatalog, RivenDraft, RivenWeapon, buffs_from_name
+from .rivens import (
+    RivenAttr,
+    RivenCatalog,
+    RivenDraft,
+    RivenWeapon,
+    buffs_from_name,
+    expected_value,
+    shown_value,
+)
 from .text_cleaner import match_score
 
 # Crops in 1920x1080 reference units, relative to the screen centre: (x, y, w, h).
@@ -59,6 +67,7 @@ class RivenRead:
     draft: RivenDraft
     warnings: list[str] = field(default_factory=list)
     raw: str = ""
+    alternates: dict = field(default_factory=dict)  # slug -> other readings of its number
 
     @property
     def ok(self) -> bool:
@@ -161,17 +170,39 @@ def _label_of(text: str) -> str:
     return " ".join(words)
 
 
-def parse_stat_lines(lines: list[str]) -> tuple[int, list[tuple[Optional[str], float, bool, str]]]:
-    """Index of the first stat line, and (sign, value, has_percent, label) per stat line."""
+# Tesseract reads this font's "7" as "/": "+174.7%" came back as "+1/4./%" (live, 14:56) and as
+# "+1/74.7/%" (a stray extra "/"). So each number is also tried with every "/" read as a 7 and with
+# every "/" dropped; the riven's possible value range then decides (read_riven).
+NUMBER = re.compile(r"\d{1,4}(?:[.,]\d{1,3})?")
+
+
+def number_variants(line: str) -> list[float]:
+    """Other ways to read the number at the start of a stat line."""
+    m = re.search(r"[+\-\u2212\u2013xX\u00d7]?\s?\d", line)
+    if not m:
+        return []
+    start = m.start() + (1 if line[m.start()] in "xX×" else 0)  # "x1.47": the x is the sign, not a letter
+    span = re.match(r"[^A-Za-z]*", line[start:]).group()
+    found = []
+    for variant in (span.replace("/", "7"), span.replace("/", ""), span.replace("/7", "7").replace("/", "7")):
+        n = NUMBER.search(variant.lstrip("+-\u2212\u2013xX\u00d7 "))
+        if n:
+            found.append(float(n.group().replace(",", ".")))
+    return list(dict.fromkeys(found))
+
+
+def parse_stat_lines(lines: list[str]) -> tuple[int, list[tuple[Optional[str], float, bool, str, list[float]]]]:
+    """Index of the first stat line, and (sign, value, has_percent, label, other readings) per stat line."""
     first, stats = -1, []
     for i, line in enumerate(lines):
+        variants = number_variants(line)
         line = _clean(line)
         # A sign right before the number marks a stat; junk read in front of it ("3  +96.8%")
         # must not be taken for the value.
         m = re.search(r"[+\-−–xX×]\s?\d", line) or re.search(r"\d", line)
         if not m:
             if stats and line and not re.search(r"MR\s*\d", line) and len(line) < 12:
-                stats[-1] = (*stats[-1][:3], stats[-1][3] + " " + line)  # wrapped label: "Bows)"
+                stats[-1] = (*stats[-1][:3], stats[-1][3] + " " + line, stats[-1][4])  # wrapped label: "Bows)"
             continue
         parsed = STAT_LINE.match(line[m.start():])
         label = _label_of(parsed.group("label")) if parsed else ""
@@ -179,7 +210,7 @@ def parse_stat_lines(lines: list[str]) -> tuple[int, list[tuple[Optional[str], f
             continue
         sign = parsed.group("sign")
         value = float(parsed.group("num").replace(",", "."))
-        stats.append((sign, value, bool(parsed.group("pct")), label))
+        stats.append((sign, value, bool(parsed.group("pct")), label, [v for v in variants if v != value]))
         if first < 0:
             first = i
     return first, stats
@@ -237,24 +268,51 @@ def read_riven(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float = 1.0) 
     shape = _mode(shapes)
     agreeing = [r for r in same_title if tuple((a.slug, a.positive) for a in r[0].draft.attrs) == shape]
 
-    def vote(i: int, slug: str) -> float:
+    mr = _mode([r[1] for r in reads])
+    rolls = _mode([r[2] for r in reads])
+    drain = _mode([r[3] for r in reads])
+    rank = min(8, max(0, drain - BASE_DRAIN)) if drain else 0
+    weapon = catalog.by_weapon.get(title[0])
+    n_buffs = sum(pos for _, pos in shape)
+    has_curse = any(not pos for _, pos in shape)
+    unsure: list[str] = []
+
+    def fits(slug: str, positive: bool, value: float) -> Optional[bool]:
+        """Does this value lie in the stat's possible range (roll 0.85-1.15)? None if unknown."""
+        if weapon is None:
+            return None
+        exp = expected_value(catalog, weapon, slug, positive, n_buffs, has_curse, rank)
+        return None if not exp else 0.85 <= shown_value(catalog, slug, value) / exp <= 1.15
+
+    def vote(i: int, slug: str, positive: bool) -> float:
         values = [r[0].draft.attrs[i].value for r in agreeing]
+        # Each pass's own reading counts twice, its alternative readings ("/" as a 7) once.
+        weighted = Counter()
+        for r in agreeing:
+            weighted[r[0].draft.attrs[i].value] += 2
+            for alt in r[0].alternates.get(slug, ()):
+                weighted[alt] += 1
+        in_range = [v for v, _ in weighted.most_common() if fits(slug, positive, v)]
+        if in_range:
+            return in_range[0]
         good = [v for v in values if plausible(catalog, slug, v)]
         if not good:
             # Every pass lost the decimal point ("968" for 96.8): put it back before the last digit.
             good = [v / 10 for v in values if v == int(v) and plausible(catalog, slug, v / 10)]
-        return _mode(good or values)
+        value = _mode(good or values)
+        if fits(slug, positive, value) is False:
+            unsure.append(catalog.stat_name(slug))
+        return value
 
-    attrs = tuple(RivenAttr(slug, vote(i, slug), positive) for i, (slug, positive) in enumerate(shape))
-    mr = _mode([r[1] for r in reads])
-    rolls = _mode([r[2] for r in reads])
-    drain = _mode([r[3] for r in reads])
+    attrs = tuple(RivenAttr(slug, vote(i, slug, positive), positive) for i, (slug, positive) in enumerate(shape))
     best = agreeing[0][0]
     warnings = [w for w in best.warnings if not (w.startswith("MR") and mr is not None)]
+    if unsure:
+        warnings.append(f"Check {', '.join(unsure)}: the value read is outside what this riven can roll.")
     if mr is None:
         warnings.append("MR not read: check it.")
     draft = RivenDraft(weapon=title[0], name=title[1], attrs=attrs, mr=mr if mr is not None else 8,
-                       rolls=rolls or 0, rank=min(8, max(0, drain - BASE_DRAIN)) if drain else 0)
+                       rolls=rolls or 0, rank=rank)
     return RivenRead(draft, warnings, best.raw)
 
 
@@ -278,12 +336,22 @@ def _read_once(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float,
 
     # The name decides which stats are buffs; the labels are only matched among those.
     slots = buffs_from_name(catalog, name, weapon) if weapon else None
+    if slots is None and weapon is not None and re.search(r"[l1|]", name):
+        # "satl-visicon": a thin i read as l. Riven name parts never contain an l next to these spots,
+        # so try each l/1/| as an i and keep the first spelling that parses.
+        for i in [m.start() for m in re.finditer(r"[l1|]", name)]:
+            fixed = name[:i] + "i" + name[i + 1:]
+            slots = buffs_from_name(catalog, fixed, weapon)
+            if slots is not None:
+                name = fixed
+                break
     if slots is None:
         warnings.append("The riven name did not read cleanly: check the buffs.")
     labels = _stat_labels(catalog, weapon)
     buff_slugs = [s for slot in (slots or []) for s in slot]
     attrs: list[RivenAttr] = []
-    for sign, value, _pct, label in stat_lines:
+    alternates: dict[str, list[float]] = {}
+    for sign, value, _pct, label, others in stat_lines:
         hit = process.extractOne(label.lower(), list(labels), scorer=fuzz.ratio)
         if not hit or hit[1] < 60:
             warnings.append(f"Could not match “{label}” to a stat.")
@@ -301,15 +369,18 @@ def _read_once(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float,
         else:
             positive = sign not in ("-", "−", "–")
         stat = catalog.by_stat.get(slug)
-        if not positive and stat and not stat.positive_is_negative and (stat.unit or "") != "multiply":
-            value = -abs(value)
-        elif positive and sign in ("-", "−", "–"):
-            value = -value  # e.g. a recoil buff is a minus
+
+        def signed(v: float) -> float:
+            if not positive and stat and not stat.positive_is_negative and (stat.unit or "") != "multiply":
+                return -abs(v)
+            return -v if positive and sign in ("-", "−", "–") else v  # a recoil buff is a minus
+
         if any(a.slug == slug for a in attrs):
             continue
-        attrs.append(RivenAttr(slug, value, positive))
+        attrs.append(RivenAttr(slug, signed(value), positive))
+        alternates[slug] = [signed(v) for v in others]
 
     mr, rolls = read_bar(binarize(crop(frame, ref_box(frame, BAR_BOX, ui_scale)), up))
     drain = read_drain(binarize(crop(frame, ref_box(frame, DRAIN_BOX, ui_scale)), up))
     draft = RivenDraft(weapon=weapon.slug if weapon else "", name=name, attrs=tuple(attrs))
-    return RivenRead(draft, warnings, raw), mr, rolls, drain
+    return RivenRead(draft, warnings, raw, alternates), mr, rolls, drain

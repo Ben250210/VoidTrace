@@ -75,5 +75,16 @@
    566
   ],
   "source": "Screenshot 2026-10-11 141330.png"
+ },
+ "burston_live": {
+  "screen": [
+   2559,
+   1599
+  ],
+  "offset": [
+   1099,
+   566
+  ],
+  "source": "Screenshot 2026-10-11 145602.png (live Ctrl+Shift+R test)"
  }
 }
