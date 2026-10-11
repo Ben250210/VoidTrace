@@ -57,15 +57,26 @@ def parse_sellers(orders: Sequence[dict], rank: Optional[int] = None, include_on
             reputation=int(user.get("reputation") or 0),
             updated_at=o.get("updatedAt", ""),
         ))
-    _, outliers = iqr_filter([r.platinum for r in rows])
-    flagged = list(outliers)
+    # Outliers are judged within each rank: a rank-10 mod at 100p is normal next to rank-0 copies at 45p.
+    flagged: dict = {}
+    for rank_value in {r.rank for r in rows}:
+        _, outliers = iqr_filter([r.platinum for r in rows if r.rank == rank_value])
+        flagged[rank_value] = list(outliers)
     marked = []
     for r in rows:
-        if r.platinum in flagged:
-            flagged.remove(r.platinum)
+        if r.platinum in flagged[r.rank]:
+            flagged[r.rank].remove(r.platinum)
             r = SellerOrder(**{**r.__dict__, "suspicious": True})
         marked.append(r)
     return sorted(marked, key=lambda r: (r.suspicious, STATUS_ORDER[r.status], r.platinum, -r.reputation))
+
+
+def rank_counts(rows: Sequence[SellerOrder]) -> dict:
+    """Sellers per rank, for the rank picker's labels."""
+    counts: dict = {}
+    for r in rows:
+        counts[r.rank] = counts.get(r.rank, 0) + 1
+    return counts
 
 
 class SellerService:

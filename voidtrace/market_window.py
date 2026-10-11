@@ -30,7 +30,7 @@ from rapidfuzz import fuzz, process, utils
 
 from .icons import platinum_icon
 from .items import CatalogItem
-from .sellers import SellerOrder, SellerService, whisper_text
+from .sellers import SellerOrder, SellerService, rank_counts, whisper_text
 
 log = logging.getLogger(__name__)
 
@@ -56,15 +56,62 @@ STATUS_COLOR = {"ingame": QColor(124, 201, 156), "online": QColor(143, 163, 255)
 MAX_SUGGESTIONS = 8
 
 
+# Short forms players type in trade chat.
+TYPO_MIN = 70  # per-word similarity needed to count as a typo of that word
+ALIASES = {"bp": "blueprint", "sys": "systems", "neuro": "neuroptics", "chas": "chassis", "rec": "receiver"}
+
+
+def _words(text: str) -> list[str]:
+    return utils.default_process(text).split()
+
+
 def search_catalog(query: str, catalog: Sequence[CatalogItem], limit: int = MAX_SUGGESTIONS) -> list[CatalogItem]:
-    """Fuzzy item search for typed queries ("primed cont", "burston bp")."""
-    query = query.strip()
-    if len(query) < 2:
+    """Shop-style search, best tier first:
+        0  name starts with the query               "prim"        -> Primed ...
+        1  every query word starts a name word, in order   "arcane ener" -> Arcane Energize
+        2  every query word starts a name word, any order
+        3  query appears inside the name
+        4  only when nothing above matched: each word within a typo of a name word ("nekrso" -> Nekros)
+    Ties go to the shorter name ("Serration" before "Spectral Serration"), typos to the closer match.
+    WRatio alone ranked hundreds of names equally and fell back to alphabetical order.
+    """
+    q_words = [ALIASES.get(w, w) for w in _words(query)]
+    if not q_words or len(" ".join(q_words)) < 2:
         return []
-    names = [item.name for item in catalog]
-    hits = process.extract(query, names, scorer=fuzz.WRatio, processor=utils.default_process,
-                           limit=limit, score_cutoff=60)
-    return [catalog[index] for _, _, index in hits]
+    q = " ".join(q_words)
+    scored = []
+    for item in catalog:
+        name = " ".join(_words(item.name))
+        n_words = name.split()
+        if name.startswith(q):
+            tier = 0
+        elif _prefix_in_order(q_words, n_words):
+            tier = 1
+        elif all(any(w.startswith(qw) for w in n_words) for qw in q_words):
+            tier = 2
+        elif q in name:
+            tier = 3
+        else:
+            continue
+        scored.append((tier, 0.0, len(name), name, item))
+    if not scored:
+        # Typos only: match each typed word to its closest name word (or the start of one).
+        for item in catalog:
+            n_words = _words(item.name)
+            best = [max(max(fuzz.ratio(qw, w), fuzz.ratio(qw, w[:len(qw) + 1])) for w in n_words) for qw in q_words]
+            if min(best) >= TYPO_MIN:
+                name = " ".join(n_words)
+                scored.append((4, -round(sum(best) / len(best)), len(name), name, item))
+    scored.sort(key=lambda s: s[:4])
+    return [s[4] for s in scored[:limit]]
+
+
+def _prefix_in_order(q_words: list[str], n_words: list[str]) -> bool:
+    i = 0
+    for w in n_words:
+        if i < len(q_words) and w.startswith(q_words[i]):
+            i += 1
+    return i == len(q_words)
 
 
 class MarketWindow(QWidget):
@@ -162,9 +209,12 @@ class MarketWindow(QWidget):
         self.rank.blockSignals(True)
         self.rank.clear()
         if item.max_rank is not None:
+            # "Any rank" first, like warframe.market: most mods are sold at rank 0 or max rank, so a
+            # single fixed rank hid most of the market.
+            self.rank.addItem("Any rank", None)
             for r in range(item.max_rank + 1):
                 self.rank.addItem(f"Rank {r}", r)
-            self.rank.setCurrentIndex(item.max_rank if rank is None else rank)
+            self.rank.setCurrentIndex(0 if rank is None else rank + 1)
         self.rank.setVisible(item.max_rank is not None)
         self.rank.blockSignals(False)
         self.show()
@@ -199,6 +249,8 @@ class MarketWindow(QWidget):
     def _on_sellers(self, request: int, rows: list) -> None:
         if request != self._request:
             return  # an older request finished after the user moved on
+        if self.item is not None and self.item.max_rank is not None and self.selected_rank() is None:
+            self._label_ranks(rank_counts(rows))
         self.rows = rows
         self.table.setRowCount(len(rows))
         dim = QColor(110, 116, 135)
@@ -226,6 +278,15 @@ class MarketWindow(QWidget):
         n_flag = sum(s.suspicious for s in rows)
         self.status.setText(f"{len(rows)} sellers" + (f", {n_flag} with unusual prices (greyed out)" if n_flag else "")
                             if rows else "Nobody is selling this right now.")
+
+    def _label_ranks(self, counts: dict) -> None:
+        """Show how many sellers each rank has, e.g. "Rank 0 (52)"."""
+        self.rank.blockSignals(True)
+        for i in range(1, self.rank.count()):
+            r = self.rank.itemData(i)
+            self.rank.setItemText(i, f"Rank {r} ({counts.get(r, 0)})")
+        self.rank.setItemText(0, f"Any rank ({sum(counts.values())})")
+        self.rank.blockSignals(False)
 
     # --- clipboard ---------------------------------------------------------------------
 

@@ -124,10 +124,44 @@ def test_catalog_and_relic_rewards_come_from_one_fetch(tmp_path):
     assert [i.name for i in rewards] == ["Burston Prime Blueprint", "Forma Blueprint"]
 
 
-def test_search_finds_partial_names():
-    assert search_catalog("primed cont", CATALOG)[0].slug == "primed_continuity"
-    assert search_catalog("burston bp", CATALOG)[0].slug.startswith("burston_prime")
-    assert search_catalog("x", CATALOG) == []
+SEARCH = CATALOG + [
+    CatalogItem("Arcane Energize", "arcane_energize", 5, ("arcane",)),
+    CatalogItem("Arcane Avenger", "arcane_avenger", 5, ("arcane",)),
+    CatalogItem("Acceltra Prime Blueprint", "acceltra_prime_blueprint", None, ("prime",)),
+    CatalogItem("Serration", "serration", 10, ("mod",)),
+    CatalogItem("Spectral Serration", "spectral_serration", 3, ("mod",)),
+    CatalogItem("Archon Vitality", "archon_vitality", 10, ("mod",)),
+    CatalogItem("Vitality", "vitality", 10, ("mod",)),
+]
+
+
+@pytest.mark.parametrize("query,first", [
+    ("primed cont", "Primed Continuity"),          # starts with the query
+    ("arcane ener", "Arcane Energize"),            # every word starts a name word
+    ("burston prime bp", "Burston Prime Blueprint"),  # "bp" alias; WRatio picked Acceltra here
+    ("serration", "Serration"),                    # shorter name wins ties
+    ("serat", "Serration"),                        # typo
+    ("vitalty", "Vitality"),                       # typo, shorter wins
+    ("primd contnuity", "Primed Continuity"),      # two typos
+])
+def test_search_ranks_like_a_shop_search(query, first):
+    assert search_catalog(query, SEARCH)[0].name == first
+
+
+def test_search_does_not_pad_exact_hits_with_fuzzy_junk():
+    assert [i.name for i in search_catalog("primed continuity", SEARCH)] == ["Primed Continuity"]
+
+
+def test_search_rejects_nonsense():
+    assert search_catalog("xyzzy", SEARCH) == []
+    assert search_catalog("x", SEARCH) == []
+
+
+def test_outliers_are_judged_within_each_rank():
+    # Rank 0 sells ~45p, rank 10 ~100p: neither group is an outlier of the other.
+    orders = [order(f"r0_{p}", p, rank=0) for p in (44, 45, 45, 46, 48)] +              [order(f"r10_{p}", p, rank=10) for p in (98, 100, 100, 105, 110)] + [order("Troll", 5, rank=10)]
+    rows = parse_sellers(orders)
+    assert {r.ingame_name for r in rows if r.suspicious} == {"Troll"}
 
 
 # --- market window ----------------------------------------------------------------------
@@ -155,8 +189,10 @@ def test_clicking_a_seller_copies_the_whisper(qapp):
     window = MarketWindow(CATALOG, sellers)
     window.open_item("primed_continuity")
     _wait(qapp, lambda: window.table.rowCount() == 2)
-    assert sellers.asked[-1] == ("primed_continuity", 10, True)  # defaults to max rank
+    assert sellers.asked[-1] == ("primed_continuity", None, True)  # any rank, like warframe.market
     assert window.rank.isVisibleTo(window)
+    assert window.rank.itemText(0) == "Any rank (2)"
+    assert window.rank.itemText(11) == "Rank 10 (2)"
     window.copy_row(1)
     assert QApplication.clipboard().text() == \
         '/w Ayla_09 Hi! I want to buy: "Primed Continuity (rank 10)" for 48 platinum. (warframe.market)'
