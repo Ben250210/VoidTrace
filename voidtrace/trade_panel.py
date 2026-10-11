@@ -11,10 +11,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtCore import QEvent, QObject, QSize, Qt
 from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QAbstractSpinBox,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -63,6 +64,28 @@ QRadioButton::indicator:checked { border: 2px solid #d9b45c;
 """
 TOP_COLUMNS = ["Player", "Rep", "Price", "Rank", "Qty"]
 STATUS_DOT = {"ingame": QColor(124, 201, 156), "online": QColor(143, 163, 255)}
+
+
+class WheelGuard(QObject):
+    """Dropdowns and number boxes ignore the mouse wheel until clicked.
+
+    Qt changes a hovered dropdown on every wheel notch, so scrolling the window over the price
+    check silently turned Puncture into the next stat in the list, Radiation.
+    """
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802 (Qt naming)
+        if event.type() == QEvent.Type.Wheel and not obj.hasFocus():
+            event.ignore()  # lets the window scroll instead
+            return True
+        return False
+
+
+def guard_wheel(root: QWidget) -> WheelGuard:
+    guard = WheelGuard(root)
+    for widget in root.findChildren((QComboBox, QAbstractSpinBox)):
+        widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        widget.installEventFilter(guard)
+    return guard
 
 
 class Stepper(QWidget):

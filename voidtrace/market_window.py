@@ -219,6 +219,9 @@ class MarketWindow(QWidget):
         layout.addWidget(self.toast)
         self._async_done.connect(lambda callback, result: callback(result))
         self.account_changed()
+        from .trade_panel import guard_wheel
+
+        self._wheel_guard = guard_wheel(self)  # scrolling over the rank picker changed the rank
 
         self.search.textEdited.connect(self._on_search)
         self.search.returnPressed.connect(self._pick_first_suggestion)

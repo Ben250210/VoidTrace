@@ -200,3 +200,42 @@ def test_reading_a_screen_without_a_riven_says_so(qapp, monkeypatch):
     window.read_from_frame(object())
     _wait(qapp, lambda: "No riven card" in window.toast.text())
     window.shutdown()
+
+
+def test_clean_filter_searches_unrolled_and_labels_them(qapp):
+    window, client = _window()
+    window.open_weapon("kulstar")
+    panel = window.find_panel
+    panel.rolls.setCurrentIndex(panel.rolls.findData(rivens.CLEAN))
+    _wait(qapp, lambda: any("re_rolls_max=0" in p for p in client.paths) and panel.status.text().endswith("cheapest."))
+    clean = [r for r, a in enumerate(panel.auctions) if a.rolls == 0]
+    assert clean and panel.table.item(clean[0], 5).text() == "0 \u00b7 clean"
+    window.shutdown()
+
+
+def test_price_check_ignores_the_rolls_filter(qapp):
+    window, client = _window()
+    window.open_weapon("kulstar")
+    window.find_panel.rolls.setCurrentIndex(window.find_panel.rolls.findData(rivens.ROLLED))
+    panel = window.price_panel
+    panel.name.setText("critacan")
+    panel.fill_from_name()
+    calls = []
+    search = window.service.search
+    window.service.search = lambda *args, **kwargs: (calls.append(kwargs), search(*args, **kwargs))[1]
+    panel.run_check()
+    _wait(qapp, lambda: panel.check is not None)
+    assert calls and all(kwargs.get("rolls") is None for kwargs in calls)
+    window.shutdown()
+
+
+def test_name_change_resets_the_old_values(qapp):
+    window, _ = _window()
+    window.open_weapon("kulstar")
+    panel = window.price_panel
+    panel.name.setText("critacan")
+    panel.fill_from_name()
+    panel.rows[0].value.setValue(120.5)
+    panel.name.setText("saticron")  # buff 1 becomes multishot: 120.5 was the crit chance value
+    panel.fill_from_name()
+    assert panel.rows[0].box.currentData() == "multishot" and panel.rows[0].value.value() == 0.0

@@ -14,10 +14,9 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
-from PyQt6.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtWidgets import (
-    QAbstractSpinBox,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -47,16 +46,19 @@ from .rivens import (
     RivenDraft,
     RivenService,
     RivenWeapon,
+    CLEAN,
+    ROLLED,
     buffs_from_name,
     price_check,
     riven_whisper,
     valid_names,
 )
-from .trade_panel import BUTTON_STYLE, Stepper, _cell, _table
+from .trade_panel import BUTTON_STYLE, Stepper, _cell, _table, guard_wheel
 
 log = logging.getLogger(__name__)
 
 BUFF_COLOR = QColor(124, 201, 156)
+CLEAN_COLOR = QColor(124, 201, 156)  # never-rolled rivens: worth calling out to buyers
 CURSE_COLOR = QColor(240, 110, 90)
 STATUS_LABEL = {"ingame": "In game", "online": "Online", "offline": "Offline"}
 STATUS_COLOR = {"ingame": QColor(124, 201, 156), "online": QColor(143, 163, 255), "offline": QColor(155, 160, 181)}
@@ -67,28 +69,6 @@ PRICE_COLUMN = AUCTION_COLUMNS.index("Price")
 MAX_BUFFS = 3
 
 ANY_CURSE, NO_CURSE, HAS_CURSE = None, "none", "has"
-
-
-class WheelGuard(QObject):
-    """Dropdowns and number boxes ignore the mouse wheel until clicked.
-
-    Qt changes a hovered dropdown on every wheel notch, so scrolling the window over the price
-    check silently turned Puncture into the next stat in the list, Radiation.
-    """
-
-    def eventFilter(self, obj, event) -> bool:  # noqa: N802 (Qt naming)
-        if event.type() == QEvent.Type.Wheel and not obj.hasFocus():
-            event.ignore()  # lets the window scroll instead
-            return True
-        return False
-
-
-def guard_wheel(root: QWidget) -> WheelGuard:
-    guard = WheelGuard(root)
-    for widget in root.findChildren((QComboBox, QAbstractSpinBox)):
-        widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        widget.installEventFilter(guard)
-    return guard
 
 
 def disposition_dots(disposition: float) -> str:
@@ -128,7 +108,8 @@ def fill_auction_table(table: QTableWidget, catalog: RivenCatalog, auctions: lis
             _cell(curse, color=CURSE_COLOR if a.negative else QColor(155, 160, 181)),
             _cell(str(a.mr), right=True),
             _cell(str(a.rank), right=True),
-            _cell(str(a.rolls), right=True),
+            _cell("0 \u00b7 clean" if a.rolls == 0 else str(a.rolls), right=True,
+                  color=CLEAN_COLOR if a.rolls == 0 else None),
             _cell(price, right=True, icon=plat),
             _cell(f"{a.seller} · {STATUS_LABEL.get(a.status, a.status)}", color=STATUS_COLOR.get(a.status)),
         ]
@@ -170,6 +151,10 @@ class FindPanel(QWidget):
         self.curse = _stat_combo([], self.curse_choices())
         self.buyout_only = QCheckBox("Buyout only")
         self.offline = QCheckBox("Include offline sellers")
+        self.rolls = QComboBox()
+        for label, value in (("Any rolls", None), ("Clean (0 rolls)", CLEAN), ("Rolled (1+)", ROLLED)):
+            self.rolls.addItem(label, value)
+        self.rolls.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.table = auction_table()
         self.table.setCursor(Qt.CursorShape.PointingHandCursor)
         self.status = QLabel(objectName="muted")
@@ -184,6 +169,7 @@ class FindPanel(QWidget):
         toggles = QHBoxLayout()
         toggles.addWidget(self.buyout_only)
         toggles.addWidget(self.offline)
+        toggles.addWidget(self.rolls)
         toggles.addStretch(1)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 8, 0, 0)
@@ -195,6 +181,7 @@ class FindPanel(QWidget):
 
         for box in (*self.buffs, self.curse):
             box.currentIndexChanged.connect(lambda _: self.refresh())
+        self.rolls.currentIndexChanged.connect(lambda _: self.refresh())
         for check in (self.buyout_only, self.offline):
             check.toggled.connect(lambda _: self.refresh())
         self.table.cellClicked.connect(lambda row, _col: self.copy_row(row))
@@ -222,9 +209,10 @@ class FindPanel(QWidget):
         request = self._request
         statuses = ("ingame", "online", "offline") if self.offline.isChecked() else ("ingame", "online")
         wanted, curse, buyout = self.wanted(), self.curse.currentData(), self.buyout_only.isChecked()
+        rolls = self.rolls.currentData()
         self.status.setText("Loading rivens…")
         self.window_.run_async(
-            lambda: self.window_.service.search(weapon.slug, wanted, curse, buyout, statuses),
+            lambda: self.window_.service.search(weapon.slug, wanted, curse, buyout, statuses, rolls=rolls),
             lambda rows: self._show(request, rows),
             lambda exc: self._failed(request, exc))
 
@@ -358,6 +346,7 @@ class PricePanel(QWidget):
             row.box.blockSignals(True)
             if row.box.currentData() not in candidates:
                 row.box.setCurrentIndex(max(row.box.findData(candidates[0]) if len(candidates) == 1 else 0, 0))
+                row.value.setValue(0.0)  # the old number belonged to the old stat
             row.box.blockSignals(False)
             if len(candidates) > 1 and row.box.currentData() not in candidates:
                 undecided.append(" or ".join(catalog.stat_name(c) for c in candidates))

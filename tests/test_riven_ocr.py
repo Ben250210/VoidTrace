@@ -84,3 +84,20 @@ def test_stat_line_parsing_survives_ocr_slips():
     assert [(s, v, label) for s, v, _, label in stats] == [
         ("x", 1.47, "Damage to Grineer"), ("+", 174.7, "Damage"), ("+", 96.8, "Multishot"),
         ("+", 121.9, "Fire Rate Bows)"), ("+", 13.2, "Heat")]  # matched as Fire Rate later
+
+
+@pytest.mark.skipif(find_tesseract() is None, reason="Tesseract not installed")
+@pytest.mark.parametrize("size", [(1920, 1200), (1680, 1050)])
+def test_reads_the_same_cards_on_smaller_screens(size, catalog):
+    # Downscaled screenshots are a harsher test than the game rendering natively at that size.
+    for key, (weapon, name, mr, rolls, rank, attrs) in EXPECTED.items():
+        d = read_riven(cv2.resize(screen(key), size, interpolation=cv2.INTER_AREA), catalog).draft
+        assert (d.weapon, d.name, d.mr, d.rolls, d.rank) == (weapon, name, mr, rolls, rank), key
+        assert list(d.attrs) == [RivenAttr(*a) for a in attrs], key
+
+
+def test_implausible_values(catalog):
+    from voidtrace.riven_ocr import plausible
+
+    assert plausible(catalog, "multishot", 96.8) and not plausible(catalog, "multishot", 968.0)
+    assert plausible(catalog, "damage_vs_corpus", 1.07) and not plausible(catalog, "damage_vs_corpus", 107.0)

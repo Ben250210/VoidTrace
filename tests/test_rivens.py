@@ -205,3 +205,10 @@ def test_buffs_from_name_round_trips_valid_names(catalog):
         for name in rivens.valid_names(catalog, positives):
             slots = rivens.buffs_from_name(catalog, name)
             assert sorted(s[0] for s in slots) == sorted(positives), name
+
+
+def test_search_path_rolls_filter():
+    assert "re_rolls_min=0&re_rolls_max=0" in rivens.search_path("kulstar", rolls=rivens.CLEAN)
+    rolled = rivens.search_path("kulstar", rolls=rivens.ROLLED)
+    assert "re_rolls_min=1" in rolled and "re_rolls_max" not in rolled
+    assert "re_rolls" not in rivens.search_path("kulstar")

@@ -17,6 +17,8 @@ Tuned on 7 real cards at 2560x1600 (tests/fixtures/rivens/screens); other resolu
 from __future__ import annotations
 
 import re
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -32,8 +34,13 @@ from .text_cleaner import match_score
 TEXT_BOX = (-110, -14, 220, 140)
 BAR_BOX = (-92, 126, 184, 24)
 DRAIN_BOX = (66, -156, 36, 26)
-UPSCALE = 4
+UPSCALE = 4  # at 2560x1600 (scale 4/3); smaller screens get more, so the text always ends up one size
+TUNED_SCALE = 2560 / 1920
 BASE_DRAIN = 10  # a rank-0 riven costs 10, +1 per rank
+# One OCR pass is fragile: changing the upscale from 4.0 to 4.002 flipped two of seven cards
+# ("+174.7%" read as "174.0", "-22%" as "-722"). Each card is read at these multiples of the base
+# upscale and every field takes the majority answer (ties go to the first, the base read).
+VOTE_FACTORS = (1.0, 0.85, 1.15, 1.3)
 WEAPON_MIN = 75  # weapon-name match score needed to trust the title
 
 # Card labels that differ from Warframe.Market's stat names.
@@ -67,8 +74,15 @@ def ref_box(frame: np.ndarray, box: tuple[int, int, int, int], ui_scale: float =
     return Box(int(w / 2 + x * s), int(h / 2 + y * s), int(bw * s), int(bh * s))
 
 
-def binarize(img: np.ndarray, upscale: int = UPSCALE) -> np.ndarray:
-    """Light text on the dark card -> black text on white, 4x larger."""
+def upscale_for(frame: np.ndarray, ui_scale: float = 1.0) -> float:
+    """Enlarge crops so letters reach the size they have on the 2560x1600 cards the reader was tuned on.
+    A fixed 4x read 7/7 cards at 1920x1200 but 2/7 at 1680x1050 (decimals and minus signs blurred)."""
+    h, w = frame.shape[:2]
+    return UPSCALE * TUNED_SCALE / (screen_scaling(w, h) * ui_scale)
+
+
+def binarize(img: np.ndarray, upscale: float = UPSCALE) -> np.ndarray:
+    """Light text on the dark card -> black text on white, enlarged."""
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
     gray = cv2.resize(gray, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
     _, b = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -190,14 +204,71 @@ def parse_title(catalog: RivenCatalog, lines: list[str]) -> tuple[Optional[Riven
     return best
 
 
+def plausible(catalog: RivenCatalog, slug: str, value: float) -> bool:
+    """Riven values stay within these bounds; OCR slips like "-722" (for -22%) or "968" (for 96.8%)
+    land outside them."""
+    stat = catalog.by_stat.get(slug)
+    if stat is not None and stat.unit == "multiply":
+        return 0.3 <= value <= 3.0
+    return abs(value) <= 500
+
+
+def _mode(values):
+    values = [v for v in values if v is not None]
+    return Counter(values).most_common(1)[0][0] if values else None
+
+
 def read_riven(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float = 1.0) -> RivenRead:
-    text_img = binarize(crop(frame, ref_box(frame, TEXT_BOX, ui_scale)))
+    """Read the card at several upscales and keep the majority answer for each field."""
+    base = upscale_for(frame, ui_scale)
+    with ThreadPoolExecutor(max_workers=len(VOTE_FACTORS)) as pool:  # each pass runs Tesseract
+        reads = list(pool.map(lambda f: _read_once(frame, catalog, ui_scale, base * f), VOTE_FACTORS))
+    found = [r for r in reads if r[0].ok]
+    if not found:
+        return reads[0][0]
+    title = _mode([(r.draft.weapon, r.draft.name) for r, *_ in found])
+    same_title = [r for r in found if (r[0].draft.weapon, r[0].draft.name) == title]
+    shapes = [tuple((a.slug, a.positive) for a in r.draft.attrs) for r, *_ in same_title]
+    # The name says how many buffs there are; a pass that dropped a line ("N +16.2% Damage") loses.
+    slots = buffs_from_name(catalog, title[1], catalog.by_weapon.get(title[0])) if title[0] else None
+    if slots is not None:
+        complete = [sh for sh in shapes if sum(pos for _, pos in sh) == len(slots)]
+        shapes = complete or shapes
+    shape = _mode(shapes)
+    agreeing = [r for r in same_title if tuple((a.slug, a.positive) for a in r[0].draft.attrs) == shape]
+
+    def vote(i: int, slug: str) -> float:
+        values = [r[0].draft.attrs[i].value for r in agreeing]
+        good = [v for v in values if plausible(catalog, slug, v)]
+        if not good:
+            # Every pass lost the decimal point ("968" for 96.8): put it back before the last digit.
+            good = [v / 10 for v in values if v == int(v) and plausible(catalog, slug, v / 10)]
+        return _mode(good or values)
+
+    attrs = tuple(RivenAttr(slug, vote(i, slug), positive) for i, (slug, positive) in enumerate(shape))
+    mr = _mode([r[1] for r in reads])
+    rolls = _mode([r[2] for r in reads])
+    drain = _mode([r[3] for r in reads])
+    best = agreeing[0][0]
+    warnings = [w for w in best.warnings if not (w.startswith("MR") and mr is not None)]
+    if mr is None:
+        warnings.append("MR not read: check it.")
+    draft = RivenDraft(weapon=title[0], name=title[1], attrs=attrs, mr=mr if mr is not None else 8,
+                       rolls=rolls or 0, rank=min(8, max(0, drain - BASE_DRAIN)) if drain else 0)
+    return RivenRead(draft, warnings, best.raw)
+
+
+def _read_once(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float,
+               up: float) -> tuple[RivenRead, Optional[int], Optional[int], Optional[int]]:
+    """One OCR pass: (read, MR, rolls, drain)."""
+    text_img = binarize(crop(frame, ref_box(frame, TEXT_BOX, ui_scale)), up)
     raw = ocr(text_img, psm=6)
     lines = [line for line in raw.splitlines() if line.strip()]
     first, stat_lines = parse_stat_lines(lines)
     warnings: list[str] = []
     if first < 0:
-        return RivenRead(RivenDraft(), ["No riven card found. Open the riven in Item Details first."], raw)
+        return RivenRead(RivenDraft(), ["No riven card found. Open the riven in Item Details first."], raw), \
+            None, None, None
 
     weapon, name, score = parse_title(catalog, lines[:first])
     if weapon is None or score < WEAPON_MIN:
@@ -238,11 +309,7 @@ def read_riven(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float = 1.0) 
             continue
         attrs.append(RivenAttr(slug, value, positive))
 
-    mr, rolls = read_bar(binarize(crop(frame, ref_box(frame, BAR_BOX, ui_scale))))
-    drain = read_drain(binarize(crop(frame, ref_box(frame, DRAIN_BOX, ui_scale))))
-    if mr is None:
-        warnings.append("MR not read: check it.")
-    rank = min(8, max(0, drain - BASE_DRAIN)) if drain else 0
-    draft = RivenDraft(weapon=weapon.slug if weapon else "", name=name, attrs=tuple(attrs),
-                       mr=mr if mr is not None else 8, rolls=rolls or 0, rank=rank)
-    return RivenRead(draft, warnings, raw)
+    mr, rolls = read_bar(binarize(crop(frame, ref_box(frame, BAR_BOX, ui_scale)), up))
+    drain = read_drain(binarize(crop(frame, ref_box(frame, DRAIN_BOX, ui_scale)), up))
+    draft = RivenDraft(weapon=weapon.slug if weapon else "", name=name, attrs=tuple(attrs))
+    return RivenRead(draft, warnings, raw), mr, rolls, drain

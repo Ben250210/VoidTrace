@@ -427,3 +427,17 @@ def test_my_orders_sorting(qapp):
     panel.sort_by(panel.MATCH)                   # button columns don't sort
     assert [o.visible for o in panel.shown] == [False, False, True, True]
     window.shutdown()
+
+
+def test_mouse_wheel_does_not_change_the_rank_picker(qapp):
+    from PyQt6.QtCore import QPoint, QPointF, Qt
+    from PyQt6.QtGui import QWheelEvent
+
+    window = MarketWindow(CATALOG, FakeSellers([SellerOrder("Kosmo", "ingame", 45, 1, 10, 49, "")]))
+    window.open_item("primed_continuity")
+    window.rank.setCurrentIndex(3)
+    wheel = QWheelEvent(QPointF(5, 5), QPointF(5, 5), QPoint(0, 0), QPoint(0, -120), Qt.MouseButton.NoButton,
+                        Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
+    QApplication.sendEvent(window.rank, wheel)
+    assert window.rank.currentIndex() == 3
+    window.shutdown()

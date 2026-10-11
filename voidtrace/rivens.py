@@ -312,9 +312,13 @@ def valid_names(catalog: "RivenCatalog", positives: Sequence[str]) -> set[str]:
     return names
 
 
+CLEAN, ROLLED = "clean", "rolled"
+
+
 def search_path(weapon: str, positives: Sequence[str] = (), negative: Optional[str] = None,
-                buyout_only: bool = False) -> str:
-    """v1 search path. `negative`: None = any, "none" = no curse, "has" = any curse, or a stat slug."""
+                buyout_only: bool = False, rolls: Optional[str] = None) -> str:
+    """v1 search path. `negative`: None = any, "none" = no curse, "has" = any curse, or a stat slug.
+    `rolls`: None = any, "clean" = never rolled (0 rolls), "rolled" = 1 or more."""
     params = {"type": "riven", "weapon_url_name": weapon, "sort_by": "price_asc"}
     if positives:
         params["positive_stats"] = ",".join(positives)
@@ -322,6 +326,10 @@ def search_path(weapon: str, positives: Sequence[str] = (), negative: Optional[s
         params["negative_stats"] = negative
     if buyout_only:
         params["buyout_policy"] = "direct"
+    if rolls == CLEAN:
+        params.update(re_rolls_min=0, re_rolls_max=0)
+    elif rolls == ROLLED:
+        params["re_rolls_min"] = 1
     return "/auctions/search?" + urlencode(params)
 
 
@@ -353,8 +361,11 @@ class RivenService:
         self._lock = threading.Lock()
 
     def search(self, weapon: str, positives: Sequence[str] = (), negative: Optional[str] = None,
-               buyout_only: bool = False, statuses: Sequence[str] = ("ingame", "online", "offline")) -> list[RivenAuction]:
-        path = search_path(weapon, positives, negative, buyout_only)
+               buyout_only: bool = False, statuses: Sequence[str] = ("ingame", "online", "offline"),
+               rolls: Optional[str] = None) -> list[RivenAuction]:
+        """`rolls` narrows the listings shown (clean / rolled). The price check never passes it:
+        whether a riven was rolled is for finding and labelling, not for its estimate."""
+        path = search_path(weapon, positives, negative, buyout_only, rolls)
         with self._lock:
             hit = self._cache.get(path)
         if hit and time.monotonic() - hit[0] < self.cache_s:
