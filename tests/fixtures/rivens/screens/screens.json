@@ -1,0 +1,79 @@
+{
+ "sobek_satidra": {
+  "screen": [
+   2556,
+   1599
+  ],
+  "offset": [
+   1098,
+   566
+  ],
+  "source": "Screenshot 2026-10-11 141033.png"
+ },
+ "burston_sati-visicon": {
+  "screen": [
+   2556,
+   1599
+  ],
+  "offset": [
+   1098,
+   566
+  ],
+  "source": "Screenshot 2026-10-11 141109.png"
+ },
+ "hikou_igni-insitron": {
+  "screen": [
+   2559,
+   1599
+  ],
+  "offset": [
+   1099,
+   566
+  ],
+  "source": "Screenshot 2026-10-11 141239.png"
+ },
+ "balla_acriata": {
+  "screen": [
+   2559,
+   1599
+  ],
+  "offset": [
+   1099,
+   566
+  ],
+  "source": "Screenshot 2026-10-11 141255.png"
+ },
+ "dread_manti-vexiata": {
+  "screen": [
+   2559,
+   1599
+  ],
+  "offset": [
+   1099,
+   566
+  ],
+  "source": "Screenshot 2026-10-11 141305.png"
+ },
+ "balla_acrido": {
+  "screen": [
+   2559,
+   1599
+  ],
+  "offset": [
+   1099,
+   566
+  ],
+  "source": "Screenshot 2026-10-11 141319.png"
+ },
+ "ceramic_dagger_manti-parades": {
+  "screen": [
+   2559,
+   1599
+  ],
+  "offset": [
+   1099,
+   566
+  ],
+  "source": "Screenshot 2026-10-11 141330.png"
+ }
+}

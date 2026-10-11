@@ -190,6 +190,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                         help="seconds before checking whether the cards have finished fading in")
     parser.add_argument("--source", choices=["auto", "debug", "file"], default="auto",
                         help="log source: live debug output (real time) or the EE.log file")
+    parser.add_argument("--riven-shot", type=Path, default=None,
+                        help="open the riven window and read the riven on this screenshot")
     parser.add_argument("--any-window", action="store_true",
                         help="capture even when Warframe is not the active window (testing)")
     parser.add_argument("--hide-after", type=float, default=20.0,
@@ -262,6 +264,18 @@ def main(argv: Optional[list[str]] = None) -> int:
         rivens.activateWindow()
         rivens.search.setFocus()
 
+    def riven_hotkey() -> None:
+        """Ctrl+Shift+R: in game, read the riven on screen (Item Details view); else just open the window."""
+        frame = None
+        if args.any_window or warframe_is_foreground():
+            try:
+                frame = capture_screen(args.monitor)  # before the window opens on top of the card
+            except Exception as exc:
+                log.warning("riven capture failed: %s", exc)
+        open_rivens()
+        if frame is not None and rivens is not None:
+            rivens.read_from_frame(frame)
+
     def open_card(slot: int) -> None:
         item = overlay.cards[slot].resolution.item
         if item is not None and item.slug is not None:
@@ -284,7 +298,16 @@ def main(argv: Optional[list[str]] = None) -> int:
                      app_icon(), 7000)
     hotkey_filter = None if args.no_hotkey else hotkey.register(app, open_market)  # noqa: F841
     riven_hotkey = None if args.no_hotkey else hotkey.register(  # noqa: F841
-        app, open_rivens, key="R", hotkey_id=hotkey.RIVEN_HOTKEY_ID)
+        app, riven_hotkey, key="R", hotkey_id=hotkey.RIVEN_HOTKEY_ID)
+
+    if args.riven_shot is not None:
+        shot = cv2.imread(str(args.riven_shot))
+        if shot is None:
+            print(f"could not read image: {args.riven_shot}", file=sys.stderr)
+            return 1
+        open_rivens()
+        if rivens is not None:
+            rivens.read_from_frame(shot)
 
     if args.demo is not None:
         frame = cv2.imread(str(args.demo))

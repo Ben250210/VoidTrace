@@ -1,0 +1,248 @@
+"""Read a riven off the screen (the in-game Item Details view) into a RivenDraft.
+
+The card sits in the middle of the screen at a fixed size, so three crops are enough:
+  * text   - weapon + riven name (one or two lines), then one line per stat
+  * bar    - "MR 12" on the left, the rolls icon + count on the right (no count when never rolled)
+  * drain  - the capacity number top right: 10 at rank 0, 18 at rank 8, so rank = drain - 10
+
+The card's text panel is plain dark, so a plain Otsu threshold on a 4x upscale reads better than
+the reward-screen cleaning (which flattens a busy 3D background): it keeps decimal points and %
+signs that the morphological filter erased ("170 4/7" instead of "170.4%"). The riven name then
+pins down the buffs (buffs_from_name), so a misread stat label cannot pick the wrong stat.
+
+Nothing is posted from a read: it only fills in the price-check form for the user to check.
+Tuned on 7 real cards at 2560x1600 (tests/fixtures/rivens/screens); other resolutions unverified.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from typing import Optional
+
+import cv2
+import numpy as np
+from rapidfuzz import fuzz, process
+
+from .cv_cleaner import Box, crop, ocr, screen_scaling
+from .rivens import RivenAttr, RivenCatalog, RivenDraft, RivenWeapon, buffs_from_name
+from .text_cleaner import match_score
+
+# Crops in 1920x1080 reference units, relative to the screen centre: (x, y, w, h).
+TEXT_BOX = (-110, -14, 220, 140)
+BAR_BOX = (-92, 126, 184, 24)
+DRAIN_BOX = (66, -156, 36, 26)
+UPSCALE = 4
+BASE_DRAIN = 10  # a rank-0 riven costs 10, +1 per rank
+WEAPON_MIN = 75  # weapon-name match score needed to trust the title
+
+# Card labels that differ from Warframe.Market's stat names.
+LABEL_ALIASES = {
+    "fire_rate_/_attack_speed": ("Fire Rate", "Attack Speed"),
+    "base_damage_/_melee_damage": ("Damage", "Melee Damage"),
+    "recoil": ("Weapon Recoil", "Recoil"),
+}
+# One stat line: sign or "x", number, optional %, label. The sign is optional because OCR
+# sometimes drops a minus; the riven name then decides which stat is the curse.
+STAT_LINE = re.compile(r"(?P<sign>[+\-−–xX×])?\s?(?P<num>\d{1,4}(?:[.,]\d{1,3})?)\s*(?P<pct>%?)\s*(?P<label>.*)")
+
+
+@dataclass
+class RivenRead:
+    draft: RivenDraft
+    warnings: list[str] = field(default_factory=list)
+    raw: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return bool(self.draft.weapon and self.draft.attrs)
+
+
+# --- image ----------------------------------------------------------------------------
+
+def ref_box(frame: np.ndarray, box: tuple[int, int, int, int], ui_scale: float = 1.0) -> Box:
+    h, w = frame.shape[:2]
+    s = screen_scaling(w, h) * ui_scale
+    x, y, bw, bh = box
+    return Box(int(w / 2 + x * s), int(h / 2 + y * s), int(bw * s), int(bh * s))
+
+
+def binarize(img: np.ndarray, upscale: int = UPSCALE) -> np.ndarray:
+    """Light text on the dark card -> black text on white, 4x larger."""
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
+    gray = cv2.resize(gray, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
+    _, b = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return cv2.copyMakeBorder(255 - b, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
+
+
+def _glyph_groups(binary: np.ndarray) -> list[list[tuple[int, int, int, int]]]:
+    """Letter-sized blobs of a one-line crop, grouped into words by the gaps between them."""
+    n, _, stats, _ = cv2.connectedComponentsWithStats(255 - binary, connectivity=8)
+    h, w = binary.shape
+    boxes = [tuple(stats[i, :4]) for i in range(1, n)
+             if stats[i, 3] < 0.9 * h and stats[i, 2] < 0.3 * w and stats[i, 3] > 0.25 * h]
+    if not boxes:
+        return []
+    tall = max(b[3] for b in boxes)
+    boxes = sorted((b for b in boxes if b[3] >= 0.6 * tall), key=lambda b: b[0])
+    groups = [[boxes[0]]]
+    for b in boxes[1:]:
+        prev = groups[-1][-1]
+        if b[0] - (prev[0] + prev[2]) > 1.2 * tall:  # a gap wider than a letter is tall: new word
+            groups.append([b])
+        else:
+            groups[-1].append(b)
+    return groups
+
+
+def read_bar(binary: np.ndarray) -> tuple[Optional[int], Optional[int]]:
+    """(MR, rolls) from the bar. The rolls icon reads as a "0" or "9", so it is counted as a
+    glyph and dropped: the rolls number has one digit less than the right-hand group."""
+    text = ocr(binary, psm=7)
+    # "MR1O", "MRI16": O/I/l are 0/1 misreads; MR tops out at 30 (Legendary 5), so keep the last
+    # two digits of anything bigger.
+    mr_match = re.search(r"MR\s*([0-9OIl|]{1,3})", text)
+    mr = None
+    if mr_match:
+        digits = mr_match.group(1).translate(str.maketrans("OIl|", "0111"))
+        mr = int(digits) if int(digits) <= 30 else int(digits[-2:])
+    rolls = 0
+    groups = _glyph_groups(binary)
+    if len(groups) >= 2 and len(groups[-1]) >= 2:
+        digits = re.findall(r"\d+", text[mr_match.end():] if mr_match else text)
+        if digits:
+            run = digits[-1]
+            rolls = int(run[-(len(groups[-1]) - 1):]) if len(run) >= len(groups[-1]) - 1 else int(run)
+    return mr, rolls
+
+
+def read_drain(binary: np.ndarray) -> Optional[int]:
+    found = re.search(r"1[0-8]", ocr(binary, psm=7))
+    return int(found.group()) if found else None
+
+
+# --- text -----------------------------------------------------------------------------
+
+def _clean(line: str) -> str:
+    line = re.sub(r"(?<=\d)/(?=\d)", "", line)  # "+1/74.7%" -> "+174.7%"
+    return line.replace("—", "-").strip()
+
+
+def _stat_labels(catalog: RivenCatalog, weapon: Optional[RivenWeapon]) -> dict[str, str]:
+    """Label -> stat slug, for the stats this weapon can roll."""
+    labels = {}
+    for stat in (catalog.stats_for(weapon) if weapon else catalog.stats):
+        for label in (stat.name, *LABEL_ALIASES.get(stat.slug, ())):
+            labels[label.lower()] = stat.slug
+    return labels
+
+
+def _label_of(text: str) -> str:
+    text = re.sub(r"\(.*", "", text)              # "Fire Rate (x2 for Bows)"
+    words = [w for w in re.findall(r"[A-Za-z]+", text)]
+    if words and len(words[0]) <= 2 and len(words) > 1:  # element icons read as "A", "*", "%"
+        words = words[1:]
+    if words and words[0][:1].isupper() and words[0][1:2].isupper():
+        words[0] = words[0][1:]                   # "AHeat": icon glued to the word
+    return " ".join(words)
+
+
+def parse_stat_lines(lines: list[str]) -> tuple[int, list[tuple[Optional[str], float, bool, str]]]:
+    """Index of the first stat line, and (sign, value, has_percent, label) per stat line."""
+    first, stats = -1, []
+    for i, line in enumerate(lines):
+        line = _clean(line)
+        # A sign right before the number marks a stat; junk read in front of it ("3  +96.8%")
+        # must not be taken for the value.
+        m = re.search(r"[+\-−–xX×]\s?\d", line) or re.search(r"\d", line)
+        if not m:
+            if stats and line and not re.search(r"MR\s*\d", line) and len(line) < 12:
+                stats[-1] = (*stats[-1][:3], stats[-1][3] + " " + line)  # wrapped label: "Bows)"
+            continue
+        parsed = STAT_LINE.match(line[m.start():])
+        label = _label_of(parsed.group("label")) if parsed else ""
+        if not parsed or len(label) < 3:
+            continue
+        sign = parsed.group("sign")
+        value = float(parsed.group("num").replace(",", "."))
+        stats.append((sign, value, bool(parsed.group("pct")), label))
+        if first < 0:
+            first = i
+    return first, stats
+
+
+def parse_title(catalog: RivenCatalog, lines: list[str]) -> tuple[Optional[RivenWeapon], str, float]:
+    """Weapon and riven name from the 1-2 lines above the stats ("Ceramic Dagger" / "Manti-parades")."""
+    words_pool = [re.findall(r"[A-Za-z][A-Za-z\-]*", _clean(line)) for line in lines]
+    candidates = []
+    for take in (1, 2):
+        if len(words_pool) >= take:
+            words = [w for ws in words_pool[-take:] for w in ws]
+            if len(words) >= 2:
+                candidates.append(words)
+    names = [w.name for w in catalog.weapons]
+    best = (None, "", 0.0)
+    for words in candidates:
+        weapon_text, riven_name = " ".join(words[:-1]), words[-1]
+        hit = process.extractOne(weapon_text, names, scorer=match_score)
+        if hit and hit[1] > best[2]:
+            best = (catalog.weapons[hit[2]], riven_name, hit[1])
+    return best
+
+
+def read_riven(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float = 1.0) -> RivenRead:
+    text_img = binarize(crop(frame, ref_box(frame, TEXT_BOX, ui_scale)))
+    raw = ocr(text_img, psm=6)
+    lines = [line for line in raw.splitlines() if line.strip()]
+    first, stat_lines = parse_stat_lines(lines)
+    warnings: list[str] = []
+    if first < 0:
+        return RivenRead(RivenDraft(), ["No riven card found. Open the riven in Item Details first."], raw)
+
+    weapon, name, score = parse_title(catalog, lines[:first])
+    if weapon is None or score < WEAPON_MIN:
+        warnings.append("Weapon not recognised: search for it above.")
+        weapon = None
+    name = name.lower()
+
+    # The name decides which stats are buffs; the labels are only matched among those.
+    slots = buffs_from_name(catalog, name, weapon) if weapon else None
+    if slots is None:
+        warnings.append("The riven name did not read cleanly: check the buffs.")
+    labels = _stat_labels(catalog, weapon)
+    buff_slugs = [s for slot in (slots or []) for s in slot]
+    attrs: list[RivenAttr] = []
+    for sign, value, _pct, label in stat_lines:
+        hit = process.extractOne(label.lower(), list(labels), scorer=fuzz.ratio)
+        if not hit or hit[1] < 60:
+            warnings.append(f"Could not match “{label}” to a stat.")
+            continue
+        slug = labels[hit[0]]
+        if slots is not None:
+            # Prefer a buff from the name with a close label ("Damage" vs "Melee Damage").
+            close = [s for s in buff_slugs if fuzz.ratio(label.lower(), catalog.stat_name(s).lower()) >= 60
+                     or any(fuzz.ratio(label.lower(), a.lower()) >= 80 for a in LABEL_ALIASES.get(s, ()))]
+            # Only when the label read poorly: a clean "Status Chance" curse must not become the
+            # "Status Duration" buff just because the two look alike.
+            if slug not in buff_slugs and close and hit[1] < 90:
+                slug = close[0]
+            positive = slug in buff_slugs and len([a for a in attrs if a.positive]) < len(slots)
+        else:
+            positive = sign not in ("-", "−", "–")
+        stat = catalog.by_stat.get(slug)
+        if not positive and stat and not stat.positive_is_negative and (stat.unit or "") != "multiply":
+            value = -abs(value)
+        elif positive and sign in ("-", "−", "–"):
+            value = -value  # e.g. a recoil buff is a minus
+        if any(a.slug == slug for a in attrs):
+            continue
+        attrs.append(RivenAttr(slug, value, positive))
+
+    mr, rolls = read_bar(binarize(crop(frame, ref_box(frame, BAR_BOX, ui_scale))))
+    drain = read_drain(binarize(crop(frame, ref_box(frame, DRAIN_BOX, ui_scale))))
+    if mr is None:
+        warnings.append("MR not read: check it.")
+    rank = min(8, max(0, drain - BASE_DRAIN)) if drain else 0
+    draft = RivenDraft(weapon=weapon.slug if weapon else "", name=name, attrs=tuple(attrs),
+                       mr=mr if mr is not None else 8, rolls=rolls or 0, rank=rank)
+    return RivenRead(draft, warnings, raw)

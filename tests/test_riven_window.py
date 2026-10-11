@@ -175,3 +175,28 @@ def test_mouse_wheel_does_not_change_an_unclicked_dropdown(qapp):
                         Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
     QApplication.sendEvent(box, wheel)
     assert box.currentData() == "puncture_damage"
+
+
+def test_reading_a_screenshot_fills_the_price_check(qapp, monkeypatch):
+    from voidtrace import riven_ocr
+
+    window, _ = _window()
+    draft = RivenDraft(weapon="kulstar", name="critacan",
+                       attrs=(RivenAttr("critical_chance", 12.1, True), RivenAttr("multishot", 9.4, True)), mr=9)
+    monkeypatch.setattr(riven_ocr, "read_riven", lambda frame, catalog: riven_ocr.RivenRead(draft))
+    window.read_from_frame(object())
+    _wait(qapp, lambda: window.price_panel.check is not None)
+    assert window.price_panel.draft().attrs == draft.attrs
+    assert window.price_panel.name_note.text().startswith("Read from the screen")
+    window.shutdown()
+
+
+def test_reading_a_screen_without_a_riven_says_so(qapp, monkeypatch):
+    from voidtrace import riven_ocr
+
+    window, _ = _window()
+    monkeypatch.setattr(riven_ocr, "read_riven",
+                        lambda frame, catalog: riven_ocr.RivenRead(RivenDraft(), ["No riven card found."]))
+    window.read_from_frame(object())
+    _wait(qapp, lambda: "No riven card" in window.toast.text())
+    window.shutdown()

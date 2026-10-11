@@ -546,6 +546,27 @@ class RivenWindow(QWidget):
         self.price_panel.load_draft(draft)
         self.tabs.setCurrentWidget(self.price_panel)
 
+    def read_from_frame(self, frame) -> None:
+        """Read the riven card on a screenshot (Ctrl+Shift+R in game) into the price check."""
+        from .riven_ocr import read_riven
+
+        self.show_toast("Reading the riven\u2026")
+        self.run_async(lambda: read_riven(frame, self.catalog), self._riven_read,
+                       lambda exc: self.show_toast(f"Could not read the riven: {exc}"))
+
+    def _riven_read(self, read) -> None:
+        if not read.ok:
+            self.show_toast(" ".join(read.warnings))
+            return
+        self.load_draft(read.draft)
+        self.show_toast("")
+        if read.warnings:
+            self.price_panel._note("Read from the screen. " + " ".join(read.warnings), warn=True)
+        else:
+            self.price_panel._note("Read from the screen. Check it against the game, and set the polarity "
+                                   "(not read).")
+        self.price_panel.run_check()
+
     def open_sell(self, draft: RivenDraft, check: Optional[PriceCheck]) -> None:
         self.sell_panel.load(draft, check)
         self.tabs.setCurrentWidget(self.sell_panel)
