@@ -552,8 +552,7 @@ class RivenWindow(QWidget):
         if read.warnings:
             self.price_panel._note("Read from the screen. " + " ".join(read.warnings), warn=True)
         else:
-            self.price_panel._note("Read from the screen. Check it against the game, and set the polarity "
-                                   "(not read).")
+            self.price_panel._note("Read from the screen. Check it against the game.")
         self.price_panel.run_check()
 
     def open_sell(self, draft: RivenDraft, check: Optional[PriceCheck]) -> None:

@@ -42,6 +42,7 @@ from .text_cleaner import match_score
 TEXT_BOX = (-110, -14, 220, 140)
 BAR_BOX = (-92, 126, 184, 24)
 DRAIN_BOX = (66, -156, 36, 26)
+POLARITY_BOX = (100, -156, 22, 26)  # the symbol right of the drain number
 UPSCALE = 4  # at 2560x1600 (scale 4/3); smaller screens get more, so the text always ends up one size
 TUNED_SCALE = 2560 / 1920
 BASE_DRAIN = 10  # a rank-0 riven costs 10, +1 per rank
@@ -137,6 +138,38 @@ def read_bar(binary: np.ndarray) -> tuple[Optional[int], Optional[int]]:
             run = digits[-1]
             rolls = int(run[-(len(groups[-1]) - 1):]) if len(run) >= len(groups[-1]) - 1 else int(run)
     return mr, rolls
+
+
+def read_polarity(img: np.ndarray, upscale: float) -> Optional[str]:
+    """Madurai, Vazarin or Naramon (the only riven polarities) from the symbol's shape.
+
+    On the 8 real cards: Naramon is a flat bar (about 2.4x wider than tall); Vazarin a filled
+    triangle, solidity (ink / convex hull) 0.78-0.82; Madurai an open V, solidity 0.60-0.67. At some
+    sizes the V's two arms come apart, so all symbol pieces are measured together.
+    """
+    big = cv2.resize(img, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
+    # The symbol is pale lavender; Otsu split Sobek's bright orange art from the dark instead.
+    hsv = cv2.cvtColor(big, cv2.COLOR_BGR2HSV)
+    b = ((hsv[..., 2] > 150) & (hsv[..., 1] < 110)).astype(np.uint8) * 255
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(b, connectivity=8)
+    h, w = b.shape
+    # The card frame's edge runs across the whole crop; specks are tiny. What is left is the symbol.
+    parts = [i for i in range(1, n) if stats[i, 2] < 0.8 * w and stats[i, 3] > 0.15 * h and stats[i, 4] > 0.01 * h * w]
+    if not parts:
+        return None
+    # The biggest piece, plus pieces touching its box (the V's other arm), not frame bits further off.
+    main = max(parts, key=lambda i: stats[i, 4])
+    mx, my, mw, mh = stats[main, :4]
+    pad = 0.15 * max(mw, mh)
+    near = [i for i in parts if stats[i, 0] < mx + mw + pad and stats[i, 0] + stats[i, 2] > mx - pad
+            and stats[i, 1] < my + mh + pad and stats[i, 1] + stats[i, 3] > my - pad]
+    mask = np.isin(labels, near).astype(np.uint8)
+    points = cv2.findNonZero(mask)
+    x, y, gw, gh = cv2.boundingRect(points)
+    if gw / gh > 1.6:
+        return "naramon"
+    solidity = mask.sum() / max(1.0, cv2.contourArea(cv2.convexHull(points)))
+    return "vazarin" if solidity > 0.72 else "madurai"
 
 
 def read_drain(binary: np.ndarray) -> Optional[int]:
@@ -272,6 +305,7 @@ def read_riven(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float = 1.0) 
     rolls = _mode([r[2] for r in reads])
     drain = _mode([r[3] for r in reads])
     rank = min(8, max(0, drain - BASE_DRAIN)) if drain else 0
+    polarity = _mode([r[0].draft.polarity or None for r in reads])
     weapon = catalog.by_weapon.get(title[0])
     n_buffs = sum(pos for _, pos in shape)
     has_curse = any(not pos for _, pos in shape)
@@ -311,8 +345,10 @@ def read_riven(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float = 1.0) 
         warnings.append(f"Check {', '.join(unsure)}: the value read is outside what this riven can roll.")
     if mr is None:
         warnings.append("MR not read: check it.")
+    if polarity is None:
+        warnings.append("Polarity not read: set it by hand.")
     draft = RivenDraft(weapon=title[0], name=title[1], attrs=attrs, mr=mr if mr is not None else 8,
-                       rolls=rolls or 0, rank=rank)
+                       rolls=rolls or 0, rank=rank, polarity=polarity or "madurai")
     return RivenRead(draft, warnings, best.raw)
 
 
@@ -382,5 +418,7 @@ def _read_once(frame: np.ndarray, catalog: RivenCatalog, ui_scale: float,
 
     mr, rolls = read_bar(binarize(crop(frame, ref_box(frame, BAR_BOX, ui_scale)), up))
     drain = read_drain(binarize(crop(frame, ref_box(frame, DRAIN_BOX, ui_scale)), up))
-    draft = RivenDraft(weapon=weapon.slug if weapon else "", name=name, attrs=tuple(attrs))
+    polarity = read_polarity(crop(frame, ref_box(frame, POLARITY_BOX, ui_scale)), up)
+    draft = RivenDraft(weapon=weapon.slug if weapon else "", name=name, attrs=tuple(attrs),
+                       polarity=polarity or "")
     return RivenRead(draft, warnings, raw, alternates), mr, rolls, drain

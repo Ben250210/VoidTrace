@@ -46,6 +46,10 @@ EXPECTED = {
                       ("multishot", 96.8, True)]),
 }
 
+POLARITY = {"sobek_satidra": "madurai", "burston_sati-visicon": "naramon", "hikou_igni-insitron": "vazarin",
+            "balla_acriata": "madurai", "dread_manti-vexiata": "madurai", "balla_acrido": "naramon",
+            "ceramic_dagger_manti-parades": "madurai", "burston_live": "naramon"}
+
 
 @pytest.fixture(scope="module")
 def catalog():
@@ -72,6 +76,7 @@ def test_reads_real_riven_cards(key, catalog):
     d = read.draft
     assert (d.weapon, d.name, d.mr, d.rolls, d.rank) == (weapon, name, mr, rolls, rank)
     assert list(d.attrs) == [RivenAttr(*a) for a in attrs]
+    assert d.polarity == POLARITY[key]
 
 
 @pytest.mark.skipif(find_tesseract() is None, reason="Tesseract not installed")
@@ -98,7 +103,8 @@ def test_reads_the_same_cards_on_smaller_screens(size, allowed_misses, catalog):
     misses = []
     for key, (weapon, name, mr, rolls, rank, attrs) in EXPECTED.items():
         d = read_riven(cv2.resize(screen(key), size, interpolation=cv2.INTER_AREA), catalog).draft
-        if (d.weapon, d.name, d.mr, d.rolls, d.rank) != (weapon, name, mr, rolls, rank) or                 list(d.attrs) != [RivenAttr(*a) for a in attrs]:
+        read = (d.weapon, d.name, d.mr, d.rolls, d.rank, d.polarity, list(d.attrs))
+        if read != (weapon, name, mr, rolls, rank, POLARITY[key], [RivenAttr(*a) for a in attrs]):
             misses.append(key)
     assert len(misses) <= allowed_misses, misses
 
