@@ -17,7 +17,6 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -26,7 +25,6 @@ from pathlib import Path
 from typing import Optional, Protocol, Sequence
 
 import numpy as np
-import requests
 
 from .items import default_cache_dir
 from .market import MarketClient
@@ -189,46 +187,6 @@ class JsonPriceCache:
             tmp.replace(self.path)
 
 
-class SupabasePriceCache:
-    """Shared cache in a Supabase table via its REST API (schema: supabase/migrations/)."""
-
-    COLUMNS = [f for f in PriceStats.__dataclass_fields__ if f != "stale"]
-
-    def __init__(self, url: str, key: str, table: str = "price_cache", session: Optional[requests.Session] = None) -> None:
-        self.endpoint = f"{url.rstrip('/')}/rest/v1/{table}"
-        self.headers = {"apikey": key, "Authorization": f"Bearer {key}"}
-        self.session = session or requests.Session()
-
-    def get(self, slug: str) -> Optional[PriceStats]:
-        resp = self.session.get(
-            self.endpoint,
-            params={"slug": f"eq.{slug}", "select": ",".join(self.COLUMNS)},
-            headers=self.headers,
-            timeout=10,
-        )
-        resp.raise_for_status()
-        rows = resp.json()
-        return PriceStats(**rows[0]) if rows else None
-
-    def put(self, stats: PriceStats) -> None:
-        row = {k: v for k, v in asdict(stats).items() if k in self.COLUMNS}
-        resp = self.session.post(
-            self.endpoint,
-            json=row,
-            headers={**self.headers, "Prefer": "resolution=merge-duplicates,return=minimal"},
-            timeout=10,
-        )
-        resp.raise_for_status()
-
-
-def cache_from_env() -> PriceCache:
-    """Supabase cache when SUPABASE_URL and SUPABASE_KEY are set, else the local JSON cache."""
-    url, key = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY")
-    if url and key:
-        return SupabasePriceCache(url, key)
-    return JsonPriceCache()
-
-
 # --- service ------------------------------------------------------------------
 
 class PriceService:
@@ -241,7 +199,7 @@ class PriceService:
         max_age: float = PRICE_TTL,
     ) -> None:
         self.client = client or MarketClient()
-        self.cache = cache if cache is not None else cache_from_env()
+        self.cache = cache if cache is not None else JsonPriceCache()
         self.max_age = max_age
 
     def _cached(self, slug: str) -> Optional[PriceStats]:

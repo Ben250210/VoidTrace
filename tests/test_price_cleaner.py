@@ -6,7 +6,6 @@ from voidtrace.price_cleaner import (
     JsonPriceCache,
     PriceService,
     PriceStats,
-    SupabasePriceCache,
     iqr_filter,
     select_sell_prices,
     summarize,
@@ -211,47 +210,3 @@ def test_service_falls_back_to_stale_cache_when_api_down(tmp_path):
 def test_service_returns_none_when_api_down_and_no_cache(tmp_path):
     service = PriceService(FakeClient(error=ConnectionError("down")), JsonPriceCache(tmp_path / "p.json"))
     assert service.get_price("nekros_prime_blueprint") is None
-
-
-# --- Supabase REST cache -------------------------------------------------------------------
-
-class FakeResponse:
-    def __init__(self, payload=None):
-        self.payload = payload
-
-    def raise_for_status(self):
-        pass
-
-    def json(self):
-        return self.payload
-
-
-class FakeSession:
-    def __init__(self, rows):
-        self.rows, self.posts, self.gets = rows, [], []
-
-    def get(self, url, params, headers, timeout):
-        self.gets.append((url, params, headers))
-        return FakeResponse(self.rows)
-
-    def post(self, url, json, headers, timeout):
-        self.posts.append((url, json, headers))
-        return FakeResponse()
-
-
-def test_supabase_cache_queries_and_upserts():
-    stats = make_stats(fetched_at=1000.0)
-    row = {k: v for k, v in stats.__dict__.items() if k != "stale"}
-    session = FakeSession([row])
-    cache = SupabasePriceCache("https://abc.supabase.co/", "pk", session=session)
-
-    assert cache.get("nekros_prime_blueprint") == stats
-    url, params, headers = session.gets[0]
-    assert url == "https://abc.supabase.co/rest/v1/price_cache"
-    assert params["slug"] == "eq.nekros_prime_blueprint"
-    assert headers["apikey"] == "pk"
-
-    cache.put(stats)
-    _, body, headers = session.posts[0]
-    assert "stale" not in body and body["price"] == 30.0
-    assert "merge-duplicates" in headers["Prefer"]

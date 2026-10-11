@@ -16,7 +16,7 @@ EE.log ──► 1 log watcher ──► 2 capture + CV clean + OCR ──► 3 
 | 1 | `voidtrace/log_watcher.py` | Tails EE.log; keyword prefilter + regex drop all but the reward-screen markers; debounces repeats; survives log rotation |
 | 2 | `voidtrace/cv_cleaner.py` | Resolution-independent crop boxes (1080p/1440p/ultrawide); grayscale → blur → morphological illumination flattening → Otsu; auto-detects squad size |
 | 3 | `voidtrace/text_cleaner.py`, `items.py` | Strips illegal chars, fixes leetspeak (`N3kr0s` → `Nekros`), drops stray glyphs and repeated words; RapidFuzz match against ~600 relic rewards; flags near-ties |
-| 4 | `voidtrace/price_cleaner.py` | Price from closed trades (volume-weighted median, 48 h, else 7 days); listings as fallback: in-game sellers, log-scale Tukey IQR purge, median of the cheapest asks; local or Supabase cache with stale fallback |
+| 4 | `voidtrace/price_cleaner.py` | Price from closed trades (volume-weighted median, 48 h, else 7 days); listings as fallback: in-game sellers, log-scale Tukey IQR purge, median of the cheapest asks; local cache with stale fallback |
 | 5 | `voidtrace/overlay.py`, `main_app.py` | Frameless, translucent, always-on-top, click-through overlay |
 
 ## Setup
@@ -43,7 +43,7 @@ python 1_log_watcher.py [--replay FILE]
 python 2_cv_cleaner.py --image shot.png --debug-dir debug/
 python 3_text_cleaner.py "N3kr0s Pr1m3" "AKSTlLETTO PRlME LINK"
 python 4_price_cleaner.py "Nekros Prime Blueprint"
-python tools/sample_log_lines.py --tail 40
+python tools/debug_log_probe.py --seconds 120   # measure EE.log delay vs live debug output
 ```
 
 ## Buying from players
@@ -59,9 +59,8 @@ python tools/sample_log_lines.py --tail 40
 
 ## Price cache
 
-Local JSON in `%LOCALAPPDATA%\VoidTrace\` by default. To share a cache through Supabase,
-apply `supabase/migrations/001_price_cache.sql` to a project and set `SUPABASE_URL` and
-`SUPABASE_KEY` (the publishable key).
+Local JSON in `%LOCALAPPDATA%\VoidTrace\`, fresh for 15 minutes, used as a stale fallback when the
+API is unreachable.
 
 ## Tests
 

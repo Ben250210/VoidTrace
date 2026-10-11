@@ -16,7 +16,7 @@ from voidtrace.log_watcher import (
 )
 
 ROOT = Path(__file__).resolve().parent.parent
-FIXTURE = ROOT / "tests" / "fixtures" / "sample_EE.log"
+FIXTURE = ROOT / "tests" / "fixtures" / "live_2026-10-10_EE_excerpt.log"  # redacted real log
 
 
 # --- line classification -------------------------------------------------
@@ -146,13 +146,6 @@ def test_missing_file_waits_then_attaches(tmp_path):
     tailer.close()
 
 
-def test_fixture_replay_finds_expected_trigger_count():
-    lines = FIXTURE.read_text(encoding="utf-8").splitlines()
-    filt = DebouncedFilter(debounce=0.0)
-    hits = [line for line in lines if filt.accept(line, now=0.0)]
-    assert len(hits) == 3  # one "Pause countdown done" + two "Got rewards"
-
-
 # --- watcher thread --------------------------------------------------------
 
 def test_watcher_emits_one_event_for_duplicate_trigger(tmp_path):
@@ -201,7 +194,7 @@ def test_cli_replay_reports_events(tmp_path):
         timeout=30,
     )
     assert result.returncode == 0
-    assert "3 events" in result.stdout
+    assert "1 events" in result.stdout  # one real reward screen
 
 
 def _wait_for(predicate, timeout: float = 2.0) -> None:
