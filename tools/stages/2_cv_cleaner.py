@@ -1,9 +1,9 @@
 """Phase 2 CLI: crop reward names from a screenshot (or the live screen) and OCR them.
 
 Examples:
-    python 2_cv_cleaner.py --image shot.png                 # offline, auto-detect squad size
-    python 2_cv_cleaner.py --image shot.png --players 4 --debug-dir debug/
-    python 2_cv_cleaner.py --capture                        # grab the primary monitor now
+    python tools/stages/2_cv_cleaner.py --image shot.png                 # offline, auto-detect squad size
+    python tools/stages/2_cv_cleaner.py --image shot.png --players 4 --debug-dir debug/
+    python tools/stages/2_cv_cleaner.py --capture                        # grab the primary monitor now
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 
 import cv2
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # run from anywhere: the repo root
 
 from voidtrace.cv_cleaner import TesseractNotFound, capture_screen, read_reward_texts
 

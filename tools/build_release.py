@@ -39,8 +39,8 @@ def set_output(folder: Path) -> None:
 HOW_TO_USE = f"""VoidTrace {__version__}
 =================
 
-Prices for Void relic rewards, right on the reward screen, plus a Warframe.Market window.
-Read-only towards the game: it reads Warframe's log and takes screenshots. Nothing is injected.
+Prices for Void relic rewards right on the reward screen, plus one window for the market, rivens
+and relics. Read-only towards the game: it reads Warframe's log and takes screenshots.
 
 START
   1. Double-click VoidTrace.exe. A blue crystal icon appears in the system tray (bottom right).
@@ -49,19 +49,33 @@ START
   2. In Warframe, set Display Mode to Borderless Fullscreen.
   3. Open a relic. Prices appear under the reward names. Click a price card to see sellers.
 
+THE VOIDTRACE WINDOW
+  Click the tray icon. The sidebar on the left has every page:
+    Market  Buy, Sell, My orders, Trades, Alerts
+    Rivens  Find, Price check, Sell, My rivens
+    Relics  Unvaulted, Vaulted, Look up
+  Sign in to Warframe.Market and Accent colour are at the bottom of the sidebar.
+  In game: Ctrl+Shift+M opens Market > Buy; Ctrl+Shift+R reads the riven on screen into Rivens.
+
 MARKET
-  Ctrl+Shift+M (or click the tray icon) opens the market window: search any item, click a seller
-  to copy the whisper, paste it in game chat. Sign in to Warframe.Market there to post and manage
-  your own orders (your password is not saved). While signed in, a finished trade lowers or removes
-  the matching order by itself, with an Undo button (tray > "Update orders after trades" to turn off).
-  The Trades tab lists every trade and the plat you made today, this week and overall.
-  "Alert me..." on an item: a tray message (click = copy whisper) when someone sells it at or under
-  your price. Alerts tab to delete them.
+  Buy: search any item, click a seller to copy the whisper, paste it in game chat. Sign in to post
+  and manage your own orders (your password is not saved). While signed in, a finished trade lowers
+  or removes the matching order by itself, with an Undo button (tray > "Update orders after trades"
+  to turn off). Trades lists every trade and the plat you made. "Alert me..." on Buy: a tray
+  message (click = copy whisper) when someone sells the item at or under your price.
 
 RIVENS
-  Ctrl+Shift+R (or tray > Rivens) opens the riven window. With a riven open in the game's Item
-  Details view, Ctrl+Shift+R reads it off the screen and prices it. Find rivens to buy (filter by
-  stats, curse, clean or rolled), price-check yours, and sell or manage your riven auctions.
+  With a riven open in Item Details or on the Cycle screen, a small popup on the right shows its
+  grades and price (click it for more), or press Ctrl+Shift+R. Find rivens to buy (filter by stats,
+  curse, clean or rolled), price-check yours, and sell or manage your riven auctions.
+
+RELICS
+  Unvaulted (green chest) and Vaulted (red chest): every relic's average plat and ducats; click a
+  column to sort. Look up: one relic's rewards, prices and chances. Solo or squad of 4.
+
+ONLINE STATUS (optional, off by default)
+  Tray > "Show me in game on Warframe.Market while playing": while signed in, your Warframe.Market
+  status is "In game" while Warframe runs and goes back to what it was when the game closes.
 
 SOMETHING WRONG?
   Right-click the tray icon > "Run self-test". It checks OCR, the internet connection and the game log.
@@ -70,17 +84,6 @@ SOMETHING WRONG?
 
 QUIT
   Right-click the tray icon > Quit VoidTrace.
-
-ONLINE STATUS (optional, off by default)
-  Tray > "Show me in game on Warframe.Market while playing": while signed in, your Warframe.Market
-  status is "In game" while Warframe runs and goes back to what it was when the game closes.
-
-RELICS
-  Tray > Relics: a relic's average plat and ducat value per refinement (solo or squad of 4), its
-  rewards, and the best relics you can farm now.
-
-ACCENT COLOUR
-  Right-click the tray icon > Accent colour: pick a preset or any colour.
 
 """ + disclaimer.text_for_file() + "\n"
 

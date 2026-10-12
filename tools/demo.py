@@ -1,8 +1,8 @@
 """Prototype showcase: run every VoidTrace stage and write an HTML report of the problems each
 cleaning step solves.
 
-    python demo.py                  # writes demo_output/report.html
-    python demo.py --offline        # skip live Warframe.Market calls (stage 4 uses cache only)
+    python tools/demo.py                  # writes demo_output/report.html
+    python tools/demo.py --offline        # skip live Warframe.Market calls (stage 4 uses cache only)
 
 Inputs: the real EE.log on this machine, live Warframe.Market data, and a synthetic reward
 screen (no real capture is needed). Nothing touches the game.
@@ -11,11 +11,11 @@ screen (no real capture is needed). Nothing touches the game.
 from __future__ import annotations
 
 import argparse
+import sys
 import base64
 import html
 import os
 import re
-import statistics
 import time
 from collections import Counter
 from pathlib import Path
@@ -26,6 +26,8 @@ os.environ.setdefault("QT_QPA_FONTDIR", r"C:\Windows\Fonts")
 
 import cv2
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # run from anywhere: the repo root
 
 from voidtrace import cv_cleaner
 from voidtrace.cv_cleaner import Box, crop, preprocess, reward_band, reward_slots, screen_scaling, slot_centers
@@ -42,7 +44,8 @@ from voidtrace.pipeline import RewardPipeline
 from voidtrace.price_cleaner import PriceService, iqr_filter, price_basis_label, select_sell_prices, summarize
 from voidtrace.text_cleaner import EntityResolver
 
-OUT = Path(__file__).parent / "demo_output"
+ROOT = Path(__file__).resolve().parents[1]
+OUT = ROOT / "demo_output"
 REWARDS = ["NEKROS PRIME BLUEPRINT", "AKSTILETTO PRIME BARREL", "FORMA BLUEPRINT", "SARYN PRIME SYSTEMS BLUEPRINT"]
 # The four rewards from the first live run.
 MARKET_ITEMS = ["braton_prime_stock", "burston_prime_blueprint", "mesa_prime_blueprint", "perigale_prime_blueprint"]
@@ -294,8 +297,8 @@ def strip_svg(m: dict) -> str:
 
 # --- live test ------------------------------------------------------------------------
 
-LIVE_SHOT = Path(__file__).parent / "docs" / "live_test_2026-10-10.png"  # lossless: JPEG artifacts broke 2 of 4 OCR reads
-LIVE_EXCERPT = Path(__file__).parent / "tests" / "fixtures" / "live_2026-10-10_EE_excerpt.log"
+LIVE_SHOT = ROOT / "docs" / "live_test_2026-10-10.png"  # lossless: JPEG artifacts broke 2 of 4 OCR reads
+LIVE_EXCERPT = ROOT / "tests" / "fixtures" / "live_2026-10-10_EE_excerpt.log"
 LIVE_SCREEN = (2560, 1600)       # the laptop's physical resolution
 LIVE_OFFSET = (555, 164)         # where the cropped screenshot sits on that screen (from the overlay's own position)
 # What the overlay displayed during the live run, read off the screenshot.
@@ -342,7 +345,7 @@ def stage_live(resolver: EntityResolver, market: list[dict]) -> dict:
 
 # --- live test 2 ----------------------------------------------------------------------
 
-LIVE2_SHOT = Path(__file__).parent / "docs" / "live_test2_2026-10-10.png"
+LIVE2_SHOT = ROOT / "docs" / "live_test2_2026-10-10.png"
 LIVE2_TRUTH = ["Forma Blueprint", "Aksomati Prime Receiver", "Kestrel Prime Blade", "Steflos Prime Receiver"]
 # Measured on 2026-10-10 with tools/debug_log_probe.py: 30 s of play, 218 lines seen by both sources.
 PROBE = {"lines": 218, "median": 0.10, "max": 11.22}

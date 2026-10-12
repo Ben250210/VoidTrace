@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import pytest
+from pathlib import Path
 
 from voidtrace.cv_cleaner import (
     Box,
@@ -151,7 +152,12 @@ def test_ocr_reads_synthetic_name():
 
 @pytest.mark.skipif(find_tesseract() is None, reason="Tesseract not installed")
 def test_cleaning_reads_harsh_screen_with_bloom_panel_and_particles():
-    from demo import REWARDS, harsh_reward_screen
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("demo", Path(__file__).resolve().parents[1] / "tools" / "demo.py")
+    demo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(demo)
+    REWARDS, harsh_reward_screen = demo.REWARDS, demo.harsh_reward_screen
     from voidtrace.items import Item
     from voidtrace.text_cleaner import EntityResolver
 

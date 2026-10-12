@@ -2,7 +2,7 @@
 in Item Details or on the Cycle screen.
 
 It shows the riven, each stat with how well it rolled, and the price estimate. Clicking it opens the
-full riven window on that riven. It never takes keyboard focus from the game.
+Rivens > Price check on that riven. It never takes keyboard focus from the game.
 """
 
 from __future__ import annotations
@@ -205,7 +205,7 @@ class RivenPopup(QWidget):
         w = self._label(message, AMBER, 9)
         w.setWordWrap(True)
         self.body.addWidget(w)
-        self.body.addWidget(self._label("Click to open the riven window", MUTED, 8))
+        self.body.addWidget(self._label("Click for the full price check", MUTED, 8))
         self._place()
 
     def _header(self, title: str) -> QHBoxLayout:

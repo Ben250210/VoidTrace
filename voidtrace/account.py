@@ -12,7 +12,7 @@ What is kept, and where:
   * the session token is stored in Windows Credential Manager (via `keyring`), not in any file
   * a random device id (Warframe.Market asks for one per install) lives in the VoidTrace cache dir
 
-Orders are created by a click in the market window. The one automatic change: after a trade goes
+Orders are created by a click in the Market section. The one automatic change: after a trade goes
 through in game, the traded item's order is lowered or removed (trades.py; tray toggle, with Undo).
 """
 

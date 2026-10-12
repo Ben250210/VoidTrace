@@ -22,7 +22,7 @@ import sys
 import threading
 import time
 from ctypes import wintypes
-from typing import Callable, Iterator, Optional
+from typing import Callable, Iterable, Iterator, Optional
 
 log = logging.getLogger(__name__)
 
@@ -49,13 +49,39 @@ def parse_message(raw: bytes) -> tuple[int, str]:
     return pid, body.decode("utf-8", errors="replace")
 
 
-def find_warframe_pid() -> Optional[int]:
-    import psutil
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
-    for proc in psutil.process_iter(["pid", "name"]):
-        name = (proc.info.get("name") or "").lower()
+
+def running_processes() -> Iterator[tuple[int, str]]:
+    """(pid, exe file name) of every process this user may look at, from Windows itself
+    (EnumProcesses + QueryFullProcessImageNameW). Processes it may not open are skipped."""
+    if sys.platform != "win32":
+        return
+    psapi, kernel32 = ctypes.WinDLL("psapi"), ctypes.WinDLL("kernel32")
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    pids = (wintypes.DWORD * 4096)()
+    used = wintypes.DWORD()
+    if not psapi.EnumProcesses(pids, ctypes.sizeof(pids), ctypes.byref(used)):
+        return
+    name = ctypes.create_unicode_buffer(1024)
+    for pid in pids[: used.value // ctypes.sizeof(wintypes.DWORD)]:
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            continue
+        try:
+            size = wintypes.DWORD(len(name))
+            if kernel32.QueryFullProcessImageNameW(handle, 0, name, ctypes.byref(size)):
+                yield int(pid), name.value.rsplit("\\", 1)[-1]
+        finally:
+            kernel32.CloseHandle(handle)
+
+
+def find_warframe_pid(processes: Optional[Callable[[], Iterable[tuple[int, str]]]] = None) -> Optional[int]:
+    """The process id of the running game (Warframe.x64.exe), or None."""
+    for pid, name in (processes or running_processes)():
+        name = name.lower()
         if name.startswith("warframe") and name.endswith(".exe"):
-            return proc.info["pid"]
+            return pid
     return None
 
 

@@ -1,4 +1,8 @@
-"""VoidTrace overlay app: log trigger -> capture -> OCR -> resolve -> price -> overlay.
+"""VoidTrace: starts everything and wires it together.
+
+The tray icon, the one VoidTrace window (Market, Rivens, Relics: voidtrace/ui/main_window.py), and the
+in-game helpers: reward-screen prices (log trigger -> capture -> OCR -> resolve -> price -> overlay),
+the riven popup, the trade card, price alerts and the online status.
 
     python main_app.py                     # watch the game's log, show prices on the reward screen
     python main_app.py --demo shot.png     # run the pipeline once on a screenshot and show it
@@ -226,7 +230,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--source", choices=["auto", "debug", "file"], default="auto",
                         help="log source: live debug output (real time) or the EE.log file")
     parser.add_argument("--riven-shot", type=Path, default=None,
-                        help="open the riven window and read the riven on this screenshot")
+                        help="open Rivens > Price check and read the riven on this screenshot")
     parser.add_argument("--any-window", action="store_true",
                         help="capture even when Warframe is not the active window (testing)")
     parser.add_argument("--hide-after", type=float, default=20.0,
@@ -252,7 +256,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if instance_lock is None:
         QMessageBox.information(None, "VoidTrace", "VoidTrace is already running.\n\n"
                                 "Look for the blue crystal icon in the system tray (bottom right, near the clock). "
-                                "Ctrl+Shift+M opens the market.")
+                                "Click the tray icon to open it.")
         return 0
     signal.signal(signal.SIGINT, lambda *_: app.quit())
     # Let Python handle Ctrl+C while Qt's loop runs.

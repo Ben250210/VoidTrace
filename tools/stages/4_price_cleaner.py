@@ -1,14 +1,17 @@
 """Phase 4 CLI: cleaned market price for items, by name (fuzzy) or slug.
 
 Examples:
-    python 4_price_cleaner.py "Nekros Prime Blueprint" "akstiletto prime barrel"
-    python 4_price_cleaner.py --slug nekros_prime_blueprint
+    python tools/stages/4_price_cleaner.py "Nekros Prime Blueprint" "akstiletto prime barrel"
+    python tools/stages/4_price_cleaner.py --slug nekros_prime_blueprint
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # run from anywhere: the repo root
 
 from voidtrace.items import load_items
 from voidtrace.price_cleaner import PriceService, price_basis_label

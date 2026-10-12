@@ -1,7 +1,7 @@
 """Price alerts: "tell me when someone sells Volt Prime Set for 55p or less".
 
 Alerts live in settings.json (`alerts`). `AlertWatcher` checks them every minute on a worker thread,
-through the same rate-limited client as the market window, and emits `found` once per seller and
+through the same rate-limited client as the Market section, and emits `found` once per seller and
 price. The tray shows it; clicking the message copies the whisper. Only public data is read.
 """
 

@@ -188,7 +188,7 @@ def test_callback_exception_does_not_kill_watcher(tmp_path):
 
 def test_cli_replay_reports_events(tmp_path):
     result = subprocess.run(
-        [sys.executable, str(ROOT / "1_log_watcher.py"), "--replay", str(FIXTURE)],
+        [sys.executable, str(ROOT / "tools" / "stages" / "1_log_watcher.py"), "--replay", str(FIXTURE)],
         capture_output=True,
         text=True,
         timeout=30,

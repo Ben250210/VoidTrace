@@ -2,7 +2,7 @@
 
 Two views of the same `/v2/items` list:
   * load_items()   - possible relic rewards (prime parts + untradable Forma), for OCR matching
-  * load_catalog() - every tradable item, mods included, for the market window's search
+  * load_catalog() - every tradable item, mods included, for the Market search box
 """
 
 from __future__ import annotations

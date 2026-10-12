@@ -68,3 +68,25 @@ def test_feeds_log_watcher_end_to_end():
     watcher = LogWatcher(None, on_event=events.append, source=src)
     watcher.handle_batch(src.poll())
     assert [e.kind for e in events] == ["open"]
+
+
+# --- finding Warframe without psutil ---------------------------------------------------------------
+
+from voidtrace.debug_log import find_warframe_pid  # noqa: E402
+
+
+def test_find_pid_picks_warframe():
+    assert find_warframe_pid(lambda: [(4, "System"), (77, "Warframe.x64.exe")]) == 77
+
+
+def test_find_pid_none_when_not_running():
+    assert find_warframe_pid(lambda: [(4, "System"), (9, "explorer.exe")]) is None
+
+
+def test_find_pid_skips_unreadable_processes():
+    assert find_warframe_pid(lambda: [(5, ""), (6, ""), (8, "WARFRAME.EXE")]) == 8
+
+
+def test_find_pid_real_process_list_does_not_raise():
+    result = find_warframe_pid()
+    assert result is None or isinstance(result, int)

@@ -5,6 +5,8 @@
     trade_updates      lower / remove your Warframe.Market orders after a trade (default on)
     alerts             price alerts: [{slug, name, max_price, rank, ranked}] (alerts.py)
     online_status      show you "in game" on Warframe.Market while Warframe runs (default off)
+    last_page          the VoidTrace window page shown last, e.g. "market/buy" (ui/main_window.py)
+    window_size        the VoidTrace window size, [width, height]
 """
 
 from __future__ import annotations

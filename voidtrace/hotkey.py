@@ -1,4 +1,4 @@
-"""Global hotkeys from inside the game: Ctrl+Shift+M opens the market window, Ctrl+Shift+R the rivens.
+"""Global hotkeys from inside the game: Ctrl+Shift+M opens Market > Buy, Ctrl+Shift+R Rivens > Price check.
 
 Uses the standard Win32 RegisterHotKey: Windows tells VoidTrace when the combination is pressed.
 Nothing is sent to or read from Warframe.

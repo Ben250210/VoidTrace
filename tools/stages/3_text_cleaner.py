@@ -1,8 +1,8 @@
 """Phase 3 CLI: clean raw OCR strings and resolve them to item names.
 
 Examples:
-    python 3_text_cleaner.py "N3kr0s Pr1m3" "AKSTlLETTO PRlME LINK"
-    python 3_text_cleaner.py --image shot.png      # Phase 2 OCR feeding Phase 3
+    python tools/stages/3_text_cleaner.py "N3kr0s Pr1m3" "AKSTlLETTO PRlME LINK"
+    python tools/stages/3_text_cleaner.py --image shot.png      # Phase 2 OCR feeding Phase 3
 """
 
 from __future__ import annotations
@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # run from anywhere: the repo root
 
 from voidtrace.items import load_items
 from voidtrace.text_cleaner import EntityResolver

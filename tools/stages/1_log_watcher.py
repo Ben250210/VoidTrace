@@ -1,9 +1,9 @@
 """Phase 1 CLI: watch EE.log and print a line the moment the reward screen opens.
 
 Examples:
-    python 1_log_watcher.py                       # live tail of the default EE.log
-    python 1_log_watcher.py --path other.log      # live tail of a custom file
-    python 1_log_watcher.py --replay sample.log   # process a saved file, no debounce
+    python tools/stages/1_log_watcher.py                       # live tail of the default EE.log
+    python tools/stages/1_log_watcher.py --path other.log      # live tail of a custom file
+    python tools/stages/1_log_watcher.py --replay sample.log   # process a saved file, no debounce
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ import logging
 import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # run from anywhere: the repo root
 
 from voidtrace.log_watcher import (
     DebouncedFilter,
