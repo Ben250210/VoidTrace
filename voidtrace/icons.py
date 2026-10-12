@@ -2,6 +2,7 @@
 
     platinum: a faceted blue-silver crystal
     ducat:    a gold coin with a raised rim and a diamond emblem
+    chest:    a treasure chest, red for a vaulted relic and green for one that drops now
 """
 
 from __future__ import annotations
@@ -47,6 +48,34 @@ def platinum_icon(size: int, ratio: float = 1.0) -> QPixmap:
     p.setPen(QPen(QColor(235, 245, 255, 170), max(0.8, s / 30)))
     for pt in (pts[0], pts[1], pts[3], pts[5]):
         p.drawLine(inner, pt)
+    p.end()
+    return px
+
+
+VAULTED_RED = "#ff6b6b"
+FARMABLE_GREEN = "#5ccf8f"
+
+
+@lru_cache(maxsize=8)
+def chest_icon(size: int, vaulted: bool, ratio: float = 1.0) -> QPixmap:
+    """A small treasure chest: rounded lid, box, dark latch. Red when vaulted, green when farmable."""
+    px, p = _canvas(size, ratio)
+    s = float(size)
+    fill = QColor(VAULTED_RED if vaulted else FARMABLE_GREEN)
+    edge = QPen(fill.darker(220), max(1.0, s / 20))
+    p.setPen(edge)
+    p.setBrush(fill)
+    lid = QPainterPath()
+    lid.moveTo(s * 0.10, s * 0.44)
+    lid.lineTo(s * 0.10, s * 0.30)
+    lid.quadTo(s * 0.50, s * 0.04, s * 0.90, s * 0.30)
+    lid.lineTo(s * 0.90, s * 0.44)
+    lid.closeSubpath()
+    p.drawPath(lid)
+    p.drawRect(QRectF(s * 0.10, s * 0.44, s * 0.80, s * 0.46))  # the box
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(fill.darker(250))
+    p.drawRect(QRectF(s * 0.43, s * 0.36, s * 0.14, s * 0.16))  # the latch, across lid and box
     p.end()
     return px
 

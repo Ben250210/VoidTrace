@@ -14,14 +14,14 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional, Sequence
 
-from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+from PyQt6.QtCore import QObject, QSize, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QVBoxLayout, QWidget
 
-from ..icons import ducat_icon, platinum_icon
+from ..icons import chest_icon, ducat_icon, platinum_icon
 from ..items import Item
 from ..price_cleaner import PriceService
-from ..relics import REFINEMENTS, Relic, Reward, chance, load_relics, relic_value, search_relics
+from ..relics import ERAS, REFINEMENTS, Relic, Reward, chance, load_relics, relic_value, search_relics
 from .widgets import Section, make_cell, make_table
 
 log = logging.getLogger(__name__)
@@ -35,8 +35,9 @@ def fmt(value: float, missing: int = 0) -> str:
 
 
 class RelicPrices(QObject):
-    """Plat and ducat values of relic rewards, shared by every Relics page. `changed` fires (at most
-    every 250 ms) as prices arrive."""
+    """Plat and ducat values of relic rewards, shared by every Relics page. Cached prices show at once
+    (however old); fresh ones are fetched in the background and `changed` fires (at most every 250 ms)
+    as they arrive."""
 
     changed = pyqtSignal()
     _price_ready = pyqtSignal(str, object)  # slug, price (None when unknown)
@@ -47,6 +48,7 @@ class RelicPrices(QObject):
         self.prices = prices
         self.plat: dict[str, Optional[float]] = {}
         self.pending: set[str] = set()
+        self.requested: set[str] = set()  # fetched live, or being fetched
         self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="VoidTrace-Relics")
         self._price_ready.connect(self._on_price)
         self._changed_soon = QTimer(self, singleShot=True, interval=250)
@@ -68,16 +70,35 @@ class RelicPrices(QObject):
         return float(item.ducats) if item else 0.0
 
     def load(self, relics: Sequence[Relic]) -> None:
-        """Fetch the prices of these relics' rewards in the background."""
+        """Show cached prices for these relics' rewards now, and fetch fresh ones in the background."""
         if self.prices is None:
             return
+        cached_any = False
         for relic in relics:
             for reward in relic.rewards:
                 item = self.item_for(reward)
-                if item is None or item.slug is None or item.slug in self.plat or item.slug in self.pending:
+                if item is None or item.slug is None or item.slug in self.requested:
                     continue
+                self.requested.add(item.slug)
                 self.pending.add(item.slug)
+                if item.slug not in self.plat:
+                    stats = self._cached(item.slug)
+                    if stats is not None:
+                        self.plat[item.slug] = stats.price
+                        cached_any = True
                 self.executor.submit(self._fetch, item.slug)
+        if cached_any:
+            self.changed.emit()
+
+    def _cached(self, slug: str):
+        try:
+            return self.prices.cached(slug) if hasattr(self.prices, "cached") else None
+        except Exception:
+            return None
+
+    def progress(self) -> tuple[int, int]:
+        """(prices fetched, prices asked for)."""
+        return len(self.requested) - len(self.pending), len(self.requested)
 
     def _fetch(self, slug: str) -> None:
         try:
@@ -89,7 +110,8 @@ class RelicPrices(QObject):
 
     def _on_price(self, slug: str, price) -> None:
         self.pending.discard(slug)
-        self.plat[slug] = price
+        if price is not None or slug not in self.plat:  # keep a cached price if the fetch failed
+            self.plat[slug] = price
         self._changed_soon.start()
 
     def shutdown(self) -> None:
@@ -97,8 +119,12 @@ class RelicPrices(QObject):
 
 
 class RelicTablePage(QWidget):
-    """Every vaulted (or every unvaulted) relic with its value. Double-click a relic for its rewards."""
+    """Every vaulted (or every unvaulted) relic with its value. Click a column header to sort by it
+    (again to flip); double-click a relic for its rewards."""
 
+    COLUMNS = ["", "Relic", "Era", "Intact plat", "Radiant plat", "Intact ducats", "Radiant ducats", "Best reward"]
+    CHEST, NAME, ERA, INTACT, RADIANT, INTACT_DUCATS, RADIANT_DUCATS, BEST = range(8)
+    TEXT_COLUMNS = {CHEST, NAME, ERA, BEST}  # sorted A-Z first; numbers start highest first
     open_relic = pyqtSignal(str)
 
     def __init__(self, vaulted: bool, data: RelicPrices, relics: Sequence[Relic],
@@ -109,14 +135,27 @@ class RelicTablePage(QWidget):
         self.relics = [r for r in relics if r.vaulted is vaulted]
         self.squad = squad
         self.loaded = False
-        self.table = make_table(["Relic", "Intact", "Radiant", "Radiant ducats"])
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.table.cellDoubleClicked.connect(lambda row, _c: self.open_relic.emit(self.table.item(row, 0).text()))
+        self.rows: list[dict] = []
+        self.sort_col, self.sort_desc = self.RADIANT, True
+        self.table = make_table(self.COLUMNS)
+        self.table.setIconSize(QSize(18, 18))
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(self.CHEST, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(self.NAME, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(self.BEST, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionsClickable(True)
+        header.sectionClicked.connect(self.sort_by)
+        for col in (self.INTACT, self.RADIANT):
+            self.table.horizontalHeaderItem(col).setIcon(QIcon(platinum_icon(14)))
+        for col in (self.INTACT_DUCATS, self.RADIANT_DUCATS):
+            self.table.horizontalHeaderItem(col).setIcon(QIcon(ducat_icon(14)))
+        self.table.cellDoubleClicked.connect(lambda row, _c: self.open_relic.emit(self.table.item(row, self.NAME).text()))
         self.status = QLabel(objectName="muted")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.status)
         layout.addWidget(self.table, 1)
+        self._update_header()
 
     def shown(self) -> None:
         if not self.loaded:
@@ -124,24 +163,77 @@ class RelicTablePage(QWidget):
             self.data.load(self.relics)
         self.render()
 
-    def render(self) -> None:
+    def sort_by(self, column: int) -> None:
+        if column == self.sort_col:
+            self.sort_desc = not self.sort_desc
+        else:
+            self.sort_col, self.sort_desc = column, column not in self.TEXT_COLUMNS
+        self._update_header()
+        self._fill()
+
+    def _update_header(self) -> None:
+        for col, text in enumerate(self.COLUMNS):
+            arrow = (" \u25bc" if self.sort_desc else " \u25b2") if col == self.sort_col and text else ""
+            self.table.horizontalHeaderItem(col).setText(text + arrow)
+            self.table.horizontalHeaderItem(col).setToolTip("Click to sort")
+
+    def _row(self, relic: Relic) -> dict:
         squad = self.squad()
-        rows = []
-        for relic in self.relics:
-            intact, m1 = relic_value(relic, self.data.plat_of, "intact", squad)
-            radiant, m2 = relic_value(relic, self.data.plat_of, "radiant", squad)
-            ducats, _ = relic_value(relic, self.data.ducats_of, "radiant", squad)
-            rows.append((radiant, relic.name, intact, ducats, m1 + m2))
-        rows.sort(key=lambda r: -r[0])
-        self.table.setRowCount(len(rows))
-        for row, (radiant, name, intact, ducats, missing) in enumerate(rows):
-            self.table.setItem(row, 0, make_cell(name))
-            self.table.setItem(row, 1, make_cell(fmt(intact, missing), right=True, icon=platinum_icon(14)))
-            self.table.setItem(row, 2, make_cell(fmt(radiant, missing), right=True, icon=platinum_icon(14)))
-            self.table.setItem(row, 3, make_cell(fmt(ducats), right=True, icon=ducat_icon(14)))
-        loading = len(self.data.pending)
-        self.status.setText(f"{len(rows)} relics. " + (f"Loading {loading} prices…" if loading else
-                                                       "Double-click one to see its rewards."))
+        values = {}
+        for col, value_of, refinement in ((self.INTACT, self.data.plat_of, "intact"),
+                                          (self.RADIANT, self.data.plat_of, "radiant"),
+                                          (self.INTACT_DUCATS, self.data.ducats_of, "intact"),
+                                          (self.RADIANT_DUCATS, self.data.ducats_of, "radiant")):
+            value, missing = relic_value(relic, value_of, refinement, squad)
+            values[col] = (value, missing)
+        priced = [(self.data.plat_of(r), r.name) for r in relic.rewards]
+        known = [(p, n) for p, n in priced if p is not None]
+        best = max(known)[1] if known and len(known) == len(priced) else "\u2026"
+        return {"relic": relic, "values": values, "best": best}
+
+    def sort_value(self, row: dict, column: int):
+        """What a row sorts by in `column`; None (sorted last) while a plat value is still loading."""
+        relic = row["relic"]
+        if column == self.CHEST:
+            return relic.name
+        if column == self.NAME:
+            return relic.name
+        if column == self.ERA:
+            return (ERAS.index(relic.era) if relic.era in ERAS else len(ERAS), relic.name)
+        if column == self.BEST:
+            return None if row["best"] == "\u2026" else row["best"]
+        value, missing = row["values"][column]
+        return None if missing else value
+
+    def render(self) -> None:
+        self.rows = [self._row(relic) for relic in self.relics]
+        self._fill()
+
+    def _fill(self) -> None:
+        known = [r for r in self.rows if self.sort_value(r, self.sort_col) is not None]
+        unknown = [r for r in self.rows if self.sort_value(r, self.sort_col) is None]
+        known.sort(key=lambda r: self.sort_value(r, self.sort_col), reverse=self.sort_desc)
+        unknown.sort(key=lambda r: r["relic"].name)
+        chest = QIcon(chest_icon(32, self.vaulted))
+        tip = "Vaulted: no longer drops" if self.vaulted else "Drops now"
+        self.table.setRowCount(len(self.rows))
+        for i, row in enumerate(known + unknown):
+            relic = row["relic"]
+            chest_cell = make_cell("")
+            chest_cell.setIcon(chest)
+            chest_cell.setToolTip(tip)
+            self.table.setItem(i, self.CHEST, chest_cell)
+            self.table.setItem(i, self.NAME, make_cell(relic.name))
+            self.table.setItem(i, self.ERA, make_cell(relic.era))
+            for col in (self.INTACT, self.RADIANT, self.INTACT_DUCATS, self.RADIANT_DUCATS):
+                value, missing = row["values"][col]
+                self.table.setItem(i, col, make_cell(fmt(value, missing), right=True))
+            self.table.setItem(i, self.BEST, make_cell(row["best"]))
+        done, asked = self.data.progress()
+        loading = asked - done
+        self.status.setText(f"{len(self.rows)} relics \u00b7 " + (f"Loading prices {done}/{asked}\u2026" if loading else
+                                                                   "double-click one for its rewards. "
+                                                                   "* = some prices not loaded yet."))
 
 
 class RelicLookupPage(QWidget):
@@ -159,6 +251,7 @@ class RelicLookupPage(QWidget):
         self.results.setMaximumWidth(230)
         self.results.currentTextChanged.connect(self.pick)
         self.title = QLabel("Pick a relic", objectName="title")
+        self.chest = QLabel()
         self.note = QLabel(objectName="muted", wordWrap=True)
         self.summary = make_table(["Value"] + [r.title() for r in REFINEMENTS])
         self.summary.setRowCount(2)
@@ -167,7 +260,10 @@ class RelicLookupPage(QWidget):
         self.rewards.horizontalHeaderItem(2).setIcon(QIcon(platinum_icon(14)))
         self.rewards.horizontalHeaderItem(3).setIcon(QIcon(ducat_icon(14)))
         detail = QVBoxLayout()
-        detail.addWidget(self.title)
+        title_row = QHBoxLayout()
+        title_row.addWidget(self.chest)
+        title_row.addWidget(self.title, 1)
+        detail.addLayout(title_row)
         detail.addWidget(self.summary)
         detail.addWidget(self.rewards, 1)
         detail.addWidget(self.note)
@@ -211,6 +307,10 @@ class RelicLookupPage(QWidget):
             return
         vault = {True: "  ·  vaulted", False: "  ·  farmable now"}.get(relic.vaulted, "")
         self.title.setText(relic.name + vault)
+        if relic.vaulted is None:
+            self.chest.clear()
+        else:
+            self.chest.setPixmap(chest_icon(24, relic.vaulted))
         missing_any = 0
         for row, (label, value_of, icon) in enumerate((("Plat", self.data.plat_of, platinum_icon(14)),
                                                        ("Ducats", self.data.ducats_of, ducat_icon(14)))):

@@ -210,3 +210,12 @@ def test_service_falls_back_to_stale_cache_when_api_down(tmp_path):
 def test_service_returns_none_when_api_down_and_no_cache(tmp_path):
     service = PriceService(FakeClient(error=ConnectionError("down")), JsonPriceCache(tmp_path / "p.json"))
     assert service.get_price("nekros_prime_blueprint") is None
+
+
+def test_cached_ignores_age_and_never_fetches(tmp_path):
+    cache = JsonPriceCache(tmp_path / "p.json")
+    cache.put(make_stats(price=30.0, fetched_at=time.time() - 86400))  # a day old
+    client = FakeClient(error=ConnectionError("must not be called"))
+    service = PriceService(client, cache)
+    assert service.cached("nekros_prime_blueprint").price == 30.0
+    assert service.cached("unknown_item") is None

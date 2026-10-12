@@ -217,6 +217,10 @@ class PriceService:
             log.warning("trade statistics unavailable for %s: %s", slug, exc)
             return None
 
+    def cached(self, slug: str) -> Optional[PriceStats]:
+        """Whatever the cache holds for `slug`, however old, without touching the network."""
+        return self._cached(slug)
+
     def get_price(self, slug: str) -> Optional[PriceStats]:
         cached = self._cached(slug)
         if cached is not None and time.time() - cached.fetched_at < self.max_age:
