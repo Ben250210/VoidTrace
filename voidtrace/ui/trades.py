@@ -91,6 +91,13 @@ class TradeHistoryPanel(QWidget):
         self.week.setText(totals_text("Last 7 days", self.records, now - timedelta(days=7)))
         self.all_time.setText(totals_text("All time", self.records, None))
         rows = list(reversed(self.records))
+        self.table.clearSpans()
+        if not rows:
+            set_rows(self.table, 1)
+            self.table.setSpan(0, 0, 1, len(self.COLUMNS))
+            self.table.setItem(0, 0, make_cell("No trades yet. They show up here after you trade in game.",
+                                               color=QColor(143, 163, 194)))
+            return
         set_rows(self.table, len(rows))
         for row, r in enumerate(rows):
             gave, got = items_text(r.trade.gave), items_text(r.trade.got)

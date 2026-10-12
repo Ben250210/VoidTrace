@@ -210,7 +210,7 @@ def test_clean_filter_searches_unrolled_and_labels_them(qapp):
     panel.rolls.setCurrentIndex(panel.rolls.findData(rivens.CLEAN))
     _wait(qapp, lambda: any("re_rolls_max=0" in p for p in client.paths) and panel.status.text().endswith("cheapest."))
     clean = [r for r, a in enumerate(panel.auctions) if a.rolls == 0]
-    assert clean and panel.table.item(clean[0], 5).text() == "0 \u00b7 clean"
+    assert clean and panel.table.item(clean[0], 5).text() == "clean"
     window.shutdown()
 
 

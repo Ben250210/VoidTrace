@@ -124,7 +124,7 @@ class PostOrderPanel(QWidget):
         self.buy_table = make_table(TOP_COLUMNS)
         for t in (self.sell_table, self.buy_table):
             t.horizontalHeaderItem(2).setIcon(QIcon(platinum_icon(14)))
-            t.setMaximumHeight(190)
+            t.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         form = QGridLayout()
         form.addWidget(QLabel("Order"), 0, 0)
@@ -207,6 +207,8 @@ class PostOrderPanel(QWidget):
         self.top = top
         for table, rows in ((self.sell_table, top["sell"]), (self.buy_table, top["buy"])):
             set_rows(table, max(1, len(rows)))
+            table.setFixedHeight(table.horizontalHeader().sizeHint().height()
+                                 + 5 * table.verticalHeader().defaultSectionSize() + 4)
             if not rows:
                 table.setItem(0, 0, make_cell("Orders not found", color=QColor(143, 163, 194)))
                 continue

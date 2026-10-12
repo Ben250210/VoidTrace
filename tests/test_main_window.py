@@ -156,15 +156,15 @@ def test_account_button_updates_both_sections(qapp):
     window, account = make_window()
     window.show_page("rivens/mine")
     assert settle(qapp, lambda: window.rivens() is not None)
-    assert window.account_button.text() == "Sign in to Warframe.Market"
+    assert window.account_button.text().endswith("Sign in to Warframe.Market")
     before = window.rivens().refreshed
     account.signed_in, account.ingame_name = True, "Tenno"
     window.market.account_changed()  # what the sign-in dialog does when it succeeds
-    assert window.account_button.text() == "Signed in as Tenno · Sign out"
+    assert window.account_button.text().endswith("Tenno · Sign out")
     assert window.rivens().refreshed == before + 1
     window.account_button.click()  # signs out
     assert not account.signed_in
-    assert window.account_button.text() == "Sign in to Warframe.Market"
+    assert window.account_button.text().endswith("Sign in to Warframe.Market")
 
 
 def test_with_rivens_waits_for_the_section(qapp):

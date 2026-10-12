@@ -11,21 +11,18 @@ import html
 import logging
 from typing import Optional, Sequence
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtWidgets import (
-    QAbstractItemView,
     QApplication,
     QCheckBox,
     QComboBox,
     QHBoxLayout,
-    QHeaderView,
     QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
     QPushButton,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -36,7 +33,7 @@ from ..icons import platinum_icon
 from ..items import CatalogItem
 from ..sellers import SellerOrder, SellerService, rank_counts, whisper_text
 from ..search import search_catalog
-from .widgets import STATUS_COLOR, STATUS_LABEL, Section, set_rows
+from .widgets import STATUS_COLOR, STATUS_LABEL, Section, make_table, set_rows
 
 log = logging.getLogger(__name__)
 
@@ -87,19 +84,9 @@ class MarketSection(Section):
         self.alert_button.setToolTip("Tell me when someone sells this at or under a price")
         self.alert_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.alert_button.clicked.connect(self._ask_alert)
-        self.table = QTableWidget(0, len(COLUMNS))
-        self.table.setHorizontalHeaderLabels(COLUMNS)
+        self.table = make_table(COLUMNS)
         self.table.horizontalHeaderItem(3).setIcon(QIcon(platinum_icon(14)))
-        self.table.verticalHeader().hide()
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setShowGrid(False)
-        self.table.setIconSize(QSize(14, 14))
         self.table.setCursor(Qt.CursorShape.PointingHandCursor)
-        header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for col in range(1, len(COLUMNS)):
-            header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
         self.status = QLabel(objectName="muted")
 
         from .orders import MyOrdersPanel, PostOrderPanel  # imported here: it imports this module's types
@@ -305,6 +292,9 @@ class MarketSection(Section):
             self.orders_panel.refresh()
 
     def page_shown(self, key: str) -> None:
+        self.search.setVisible(key in ("buy", "sell"))  # the item search only matters on Buy and Sell
+        if key not in ("buy", "sell"):
+            self.suggestions.hide()
         if key == "orders":
             self.orders_panel.refresh()
         elif key == "trades":

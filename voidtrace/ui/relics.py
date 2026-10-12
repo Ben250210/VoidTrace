@@ -14,7 +14,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional, Sequence
 
-from PyQt6.QtCore import QObject, QSize, QTimer, pyqtSignal
+from PyQt6.QtCore import QObject, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QVBoxLayout, QWidget
 
@@ -146,8 +146,8 @@ class RelicTablePage(QWidget):
         self.table.setIconSize(QSize(18, 18))
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(self.CHEST, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(self.NAME, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(self.BEST, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(self.NAME, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(self.BEST, QHeaderView.ResizeMode.Stretch)
         header.setSectionsClickable(True)
         header.sectionClicked.connect(self.sort_by)
         for col in (self.INTACT, self.RADIANT):
@@ -156,9 +156,11 @@ class RelicTablePage(QWidget):
             self.table.horizontalHeaderItem(col).setIcon(QIcon(ducat_icon(14)))
         self.table.cellDoubleClicked.connect(lambda row, _c: self.open_relic.emit(self.table.item(row, self.NAME).text()))
         self.status = QLabel(objectName="muted")
+        self.bar = QHBoxLayout()  # RelicSection puts the Solo / Squad picker here
+        self.bar.addWidget(self.status, 1)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.status)
+        layout.addLayout(self.bar)
         layout.addWidget(self.table, 1)
         self._update_header()
 
@@ -266,15 +268,16 @@ class RelicLookupPage(QWidget):
         self.note = QLabel(objectName="muted", wordWrap=True)
         self.summary = make_table(["Value"] + [r.title() for r in REFINEMENTS])
         self.summary.setRowCount(2)
-        self.summary.setMaximumHeight(96)
+        self.summary.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.summary.setFixedHeight(self.summary.horizontalHeader().sizeHint().height() + 2 * 36 + 4)
         self.rewards = make_table(["Reward", "Rarity", "Plat", "Ducats", "Intact", "Radiant"])
         self.rewards.horizontalHeaderItem(2).setIcon(QIcon(platinum_icon(14)))
         self.rewards.horizontalHeaderItem(3).setIcon(QIcon(ducat_icon(14)))
         detail = QVBoxLayout()
-        title_row = QHBoxLayout()
-        title_row.addWidget(self.chest)
-        title_row.addWidget(self.title, 1)
-        detail.addLayout(title_row)
+        self.bar = QHBoxLayout()  # RelicSection puts the Solo / Squad picker here
+        self.bar.addWidget(self.chest)
+        self.bar.addWidget(self.title, 1)
+        detail.addLayout(self.bar)
         detail.addWidget(self.summary)
         detail.addWidget(self.rewards, 1)
         detail.addWidget(self.note)
@@ -326,6 +329,8 @@ class RelicLookupPage(QWidget):
             self.chest.clear()
         else:
             self.chest.setPixmap(chest_icon(24, relic.vaulted))
+        self.summary.setFixedHeight(self.summary.horizontalHeader().sizeHint().height()
+                                    + self.summary.rowHeight(0) + self.summary.rowHeight(1) + 4)
         missing_any = 0
         for row, (label, value_of, icon) in enumerate((("Plat", self.data.plat_of, platinum_icon(14)),
                                                        ("Ducats", self.data.ducats_of, ducat_icon(14)))):
@@ -374,15 +379,13 @@ class RelicSection(Section):
             table_page.open_relic.connect(self.show_relic)
         self.squad.currentIndexChanged.connect(lambda _: self.render())
         self.data.changed.connect(self.render)
-        top = QHBoxLayout()
-        top.addStretch(1)
-        top.addWidget(self.squad)
+        self.squad.setFixedWidth(220)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addLayout(top)
         layout.addWidget(self.pages, 1)
 
     def page_shown(self, key: str) -> None:
+        self.page(key).bar.addWidget(self.squad)  # moves the one picker to the page on screen
         self.page(key).shown()
 
     def show_relic(self, name: str) -> None:

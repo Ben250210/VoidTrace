@@ -29,22 +29,33 @@ log = logging.getLogger(__name__)
 
 STYLE = """
 QWidget { background: #0b1220; color: #e6eefb; font-family: 'Segoe UI'; font-size: 13px; }
-QLineEdit, QComboBox { background: #111a2e; border: 1px solid #22314f; border-radius: 4px; padding: 5px 8px; }
-QLineEdit:focus { border-color: #4fa3ff; }
-QListWidget { background: #111a2e; border: 1px solid #22314f; }
-QListWidget::item:selected { background: #22314f; }
-QTableWidget { background: #0b1220; border: none; gridline-color: #16213a; }
-QTableWidget::item { padding: 4px; }
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { background: #111a2e; border: 1px solid #22314f;
+    border-radius: 6px; padding: 6px 10px; min-height: 20px; selection-background-color: #4fa3ff; }
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus { border-color: #4fa3ff; }
+QLineEdit:hover, QComboBox:hover { border-color: #33476e; }
+QComboBox QAbstractItemView { background: #111a2e; border: 1px solid #22314f; selection-background-color: #1c2a47; }
+QListWidget { background: #0e1729; border: 1px solid #1b2742; border-radius: 8px; padding: 4px; outline: none; }
+QListWidget::item { padding: 7px 10px; border-radius: 5px; }
+QListWidget::item:selected { background: #1c2a47; color: #e6eefb; }
+QListWidget::item:hover:!selected { background: #142038; }
+QTableWidget { background: #0b1220; alternate-background-color: #0e1729; border: 1px solid #16213a;
+    border-radius: 8px; gridline-color: transparent; selection-background-color: #1c2a47; outline: none; }
+QTableWidget::item { padding: 4px 8px; border: none; }
 QTableWidget::item:hover { background: #16213a; }
-QHeaderView::section { background: #0b1220; color: #8fa3c2; border: none; border-bottom: 1px solid #22314f;
-                       padding: 6px; font-size: 11px; font-weight: 600; }
+QTableCornerButton::section { background: #0e1729; border: none; }
+QHeaderView::section { background: #0e1729; color: #8fa3c2; border: none; border-bottom: 1px solid #22314f;
+    padding: 9px 8px; font-size: 11px; font-weight: 600; }
 QLabel#title { font-size: 18px; font-weight: 600; }
 QLabel#toast { color: #7cc99c; }
 QLabel#muted { color: #8fa3c2; }
-QTabWidget::pane { border: none; border-top: 1px solid #22314f; }
-QTabBar::tab { background: #0b1220; color: #8fa3c2; padding: 7px 14px; border: none; }
-QTabBar::tab:selected { color: #e6eefb; border-bottom: 2px solid #4fa3ff; }
-QPushButton#account { background: #111a2e; border: 1px solid #22314f; border-radius: 4px; padding: 5px 10px; }
+QCheckBox { spacing: 8px; }
+QScrollBar:vertical { background: transparent; width: 10px; margin: 4px 2px; }
+QScrollBar:horizontal { background: transparent; height: 10px; margin: 2px 4px; }
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal { background: #22314f; border-radius: 3px; min-height: 30px;
+    min-width: 30px; }
+QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover { background: #33476e; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+QScrollBar::add-page, QScrollBar::sub-page { background: none; }
 """
 
 BUTTON_STYLE = """
@@ -143,7 +154,11 @@ def make_table(columns: list[str]) -> QTableWidget:
     t.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
     t.setShowGrid(False)
     t.setIconSize(QSize(14, 14))
+    t.setAlternatingRowColors(True)  # striped rows: easier to follow a row across wide tables
+    t.verticalHeader().setDefaultSectionSize(36)
     header = t.horizontalHeader()
+    header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    header.setHighlightSections(False)
     header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
     for c in range(1, len(columns)):
         header.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
@@ -193,6 +208,8 @@ class Section(QWidget):
         self._async_done.connect(lambda callback, result: callback(result))
 
     def add_page(self, key: str, widget: QWidget) -> None:
+        if widget.layout() is not None:  # pages line up with the section's own controls
+            widget.layout().setContentsMargins(0, 14, 0, 0)
         self._page_by_key[key] = widget
         self.pages.addWidget(widget)
 

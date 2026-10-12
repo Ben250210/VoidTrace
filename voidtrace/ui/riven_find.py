@@ -33,7 +33,7 @@ from ..rivens import (
     riven_whisper,
 )
 from .widgets import make_cell, make_table, set_rows
-from .widgets import BUFF_COLOR, CURSE_COLOR, STATUS_COLOR, STATUS_LABEL
+from .widgets import BUFF_COLOR, CURSE_COLOR, STATUS_COLOR
 
 
 if TYPE_CHECKING:
@@ -75,10 +75,10 @@ def auction_table() -> QTableWidget:
     table.setWordWrap(True)
     table.horizontalHeaderItem(PRICE_COLUMN).setIcon(QIcon(platinum_icon(14)))
     header = table.horizontalHeader()
-    # Names and stat lines must not elide or wrap ("Ru... Igni..."); the seller column takes the slack.
+    # Nothing may elide ("Ru... Igni...", "The0...", "-9... Pr..."): every column fits its text, and a
+    # narrow window scrolls sideways instead.
     for c in range(len(AUCTION_COLUMNS)):
         header.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
-    header.setSectionResizeMode(len(AUCTION_COLUMNS) - 1, QHeaderView.ResizeMode.Stretch)
     return table
 
 
@@ -105,11 +105,11 @@ def fill_auction_table(table: QTableWidget, catalog: RivenCatalog, auctions: lis
             make_cell(curse, color=CURSE_COLOR if a.negative else QColor(143, 163, 194)),
             make_cell(str(a.mr), right=True),
             make_cell(str(a.rank), right=True),
-            make_cell("0 \u00b7 clean" if a.rolls == 0 else str(a.rolls), right=True,
+            make_cell("clean" if a.rolls == 0 else str(a.rolls), right=True,
                   color=CLEAN_COLOR if a.rolls == 0 else None),
             make_cell("" if g is None else grade_from_percent(g), right=True, color=grade_color(g)),
             make_cell(price, right=True, icon=plat),
-            make_cell(f"{a.seller} · {STATUS_LABEL.get(a.status, a.status)}", color=STATUS_COLOR.get(a.status)),
+            make_cell(a.seller, color=STATUS_COLOR.get(a.status)),
         ]
         for c, cell in enumerate(cells):
             table.setItem(r, c, cell)

@@ -14,8 +14,8 @@ from typing import Callable, Optional
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QActionGroup
-from PyQt6.QtWidgets import (QColorDialog, QHBoxLayout, QLabel, QMenu, QPushButton, QStackedWidget, QToolButton,
-                             QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QColorDialog, QHBoxLayout, QLabel, QMenu, QPushButton, QStackedWidget, QTreeWidget,
+                             QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from .. import settings, theme
 from .market import MarketSection
@@ -30,17 +30,23 @@ SIDEBAR = (("market", "MARKET", MarketSection.PAGES),
            ("relics", "RELICS", RelicSection.PAGES))
 PAGE_KEYS = [f"{section}/{page}" for section, _title, pages in SIDEBAR for page in pages]
 DEFAULT_PAGE = "market/buy"
-DEFAULT_SIZE = (1100, 720)
+DEFAULT_SIZE = (1280, 800)
 
 SIDEBAR_STYLE = """
-QTreeWidget#sidebar { background: #08101c; border: none; border-right: 1px solid #16213a; font-size: 13px; }
-QTreeWidget#sidebar::item { padding: 5px 6px; border: none; }
-QTreeWidget#sidebar::item:selected { background: #16213a; color: #4fa3ff; border-left: 2px solid #4fa3ff; }
+QWidget#side { background: #08101c; border-right: 1px solid #16213a; }
+QWidget#side QWidget { background: transparent; }
+QTreeWidget#sidebar { border: none; font-size: 13px; outline: none; }
+QTreeWidget#sidebar::item { padding: 7px 10px; border: none; border-radius: 6px; margin: 1px 0; }
+QTreeWidget#sidebar::item:selected { background: #16213a; color: #4fa3ff; }
 QTreeWidget#sidebar::item:hover:!selected { background: #0f192b; }
-QLabel#brand { font-size: 16px; font-weight: 700; color: #4fa3ff; padding: 8px 6px 2px 6px; }
-QPushButton#account, QToolButton#accent { background: #111a2e; border: 1px solid #22314f; border-radius: 4px;
-    padding: 5px 8px; text-align: left; }
-QToolButton#accent::menu-indicator { image: none; }
+QLabel#brand { font-size: 18px; font-weight: 700; color: #4fa3ff; padding: 18px 12px 10px 12px; }
+QPushButton#sidebtn { background: transparent; border: none; border-radius: 6px; padding: 8px 12px;
+    text-align: left; color: #b8c6de; }
+QPushButton#sidebtn:hover { background: #0f192b; color: #e6eefb; }
+QPushButton#sidebtn::menu-indicator { image: none; width: 0; }
+QTreeWidget#sidebar::branch { background: transparent; }
+QLabel#crumb { color: #8fa3c2; font-size: 11px; font-weight: 700; }
+QLabel#pageTitle { font-size: 24px; font-weight: 700; padding-bottom: 6px; qproperty-indent: 0; }
 """
 
 
@@ -91,7 +97,7 @@ class MainWindow(QWidget):
         self.sidebar = QTreeWidget(objectName="sidebar")
         self.sidebar.setHeaderHidden(True)
         self.sidebar.setRootIsDecorated(False)
-        self.sidebar.setIndentation(10)
+        self.sidebar.setIndentation(0)
         self._items: dict[str, QTreeWidgetItem] = {}
         for section, title, pages in SIDEBAR:
             header = QTreeWidgetItem([title])
@@ -112,14 +118,15 @@ class MainWindow(QWidget):
         self.sidebar.itemClicked.connect(self._clicked)
         self.sidebar.currentItemChanged.connect(lambda item, _old: self._clicked(item) if item else None)
 
-        self.account_button = QPushButton(objectName="account")
+        self.account_button = QPushButton(objectName="sidebtn")
         self.account_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.account_button.clicked.connect(self._account_clicked)
-        self.accent_button = QToolButton(objectName="accent", text="Accent colour")
-        self.accent_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.accent_button.setMenu(accent_menu(self))
+        self.accent_button = QPushButton("\U0001f3a8  Accent colour", objectName="sidebtn")
+        self._accent_menu = accent_menu(self)
+        self.accent_button.clicked.connect(lambda: self._accent_menu.exec(
+            self.accent_button.mapToGlobal(self.accent_button.rect().topLeft())))
         self.accent_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.discord_button = QPushButton("Discord", objectName="account")
+        self.discord_button = QPushButton("\U0001f514  Discord", objectName="sidebtn")
         self.discord_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.discord_button.setVisible(discord is not None)
         self.discord_button.clicked.connect(lambda: self._open_discord(discord))
@@ -131,19 +138,30 @@ class MainWindow(QWidget):
         for section in (market, relics):
             self._watch(section)
 
-        side = QWidget()
-        side.setFixedWidth(190)
+        side = QWidget(objectName="side")
+        side.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        side.setFixedWidth(210)
         left = QVBoxLayout(side)
-        left.setContentsMargins(0, 0, 0, 8)
+        left.setContentsMargins(10, 0, 10, 14)
+        left.setSpacing(2)
         left.addWidget(QLabel("VoidTrace", objectName="brand"))
         left.addWidget(self.sidebar, 1)
         left.addWidget(self.account_button)
         left.addWidget(self.accent_button)
         left.addWidget(self.discord_button)
+        self.crumb = QLabel(objectName="crumb")
+        self.page_title = QLabel(objectName="pageTitle")
+        content = QVBoxLayout()
+        content.setContentsMargins(28, 22, 28, 20)
+        content.setSpacing(2)
+        content.addWidget(self.crumb)
+        content.addWidget(self.page_title)
+        content.addWidget(self.stack, 1)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 10, 10)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.addWidget(side)
-        layout.addWidget(self.stack, 1)
+        layout.addLayout(content, 1)
 
         self._rivens_loaded.connect(self._on_rivens_loaded)
         self._rivens_failed.connect(self._on_rivens_failed)
@@ -220,6 +238,9 @@ class MainWindow(QWidget):
             self.show_page(key)
 
     def _select(self, key: str) -> None:
+        section, page = key.split("/")
+        self.crumb.setText(dict((s, t) for s, t, _p in SIDEBAR)[section])
+        self.page_title.setText(dict((s, p) for s, _t, p in SIDEBAR)[section][page])
         self.sidebar.blockSignals(True)
         self.sidebar.setCurrentItem(self._items[key])
         self.sidebar.blockSignals(False)
@@ -292,9 +313,11 @@ class MainWindow(QWidget):
 
     def refresh_account_button(self) -> None:
         if self.account.signed_in:
-            self.account_button.setText(f"Signed in as {self.account.ingame_name or 'you'} · Sign out")
+            self.account_button.setText(f"\U0001f464  {self.account.ingame_name or 'You'} \u00b7 Sign out")
+            self.account_button.setToolTip("Signed in to Warframe.Market. Click to sign out.")
         else:
-            self.account_button.setText("Sign in to Warframe.Market")
+            self.account_button.setText("\U0001f464  Sign in to Warframe.Market")
+            self.account_button.setToolTip("")
 
     def account_changed(self) -> None:
         """Signed in or out somewhere: update the button and every other section."""
