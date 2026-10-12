@@ -73,28 +73,31 @@ class RelicPrices(QObject):
         """Show cached prices for these relics' rewards now, and fetch fresh ones in the background."""
         if self.prices is None:
             return
-        cached_any = False
+        slugs = []
         for relic in relics:
             for reward in relic.rewards:
                 item = self.item_for(reward)
-                if item is None or item.slug is None or item.slug in self.requested:
-                    continue
-                self.requested.add(item.slug)
-                self.pending.add(item.slug)
-                if item.slug not in self.plat:
-                    stats = self._cached(item.slug)
-                    if stats is not None:
-                        self.plat[item.slug] = stats.price
-                        cached_any = True
-                self.executor.submit(self._fetch, item.slug)
-        if cached_any:
+                if item is not None and item.slug is not None and item.slug not in self.requested \
+                        and item.slug not in slugs:
+                    slugs.append(item.slug)
+        if not slugs:
+            return
+        cached = self._cached([s for s in slugs if s not in self.plat])
+        for slug in slugs:
+            self.requested.add(slug)
+            self.pending.add(slug)
+            if slug in cached:
+                self.plat[slug] = cached[slug].price
+            self.executor.submit(self._fetch, slug)
+        if cached:
             self.changed.emit()
 
-    def _cached(self, slug: str):
+    def _cached(self, slugs: list[str]) -> dict:
+        """Cached prices for these slugs, read in one go."""
         try:
-            return self.prices.cached(slug) if hasattr(self.prices, "cached") else None
+            return self.prices.cached_many(slugs) if hasattr(self.prices, "cached_many") else {}
         except Exception:
-            return None
+            return {}
 
     def progress(self) -> tuple[int, int]:
         """(prices fetched, prices asked for)."""
@@ -158,7 +161,9 @@ class RelicTablePage(QWidget):
         self._update_header()
 
     def shown(self) -> None:
-        if not self.loaded:
+        """The page came into view. Prices load only once it is really on screen: a hidden window
+        must not keep the API busy while the reward overlay needs it."""
+        if not self.loaded and self.isVisible():
             self.loaded = True
             self.data.load(self.relics)
         self.render()
@@ -230,10 +235,12 @@ class RelicTablePage(QWidget):
                 self.table.setItem(i, col, make_cell(fmt(value, missing), right=True))
             self.table.setItem(i, self.BEST, make_cell(row["best"]))
         done, asked = self.data.progress()
-        loading = asked - done
-        self.status.setText(f"{len(self.rows)} relics \u00b7 " + (f"Loading prices {done}/{asked}\u2026" if loading else
-                                                                   "double-click one for its rewards. "
-                                                                   "* = some prices not loaded yet."))
+        missing = any(row["values"][self.RADIANT][1] for row in self.rows)
+        if asked - done:
+            text = f"Loading prices {done}/{asked}\u2026"
+        else:
+            text = "double-click one for its rewards" + (" (* = some prices not loaded yet)" if missing else "")
+        self.status.setText(f"{len(self.rows)} relics \u00b7 {text}")
 
 
 class RelicLookupPage(QWidget):
@@ -293,8 +300,12 @@ class RelicLookupPage(QWidget):
         relic = next((r for r in self.relics if r.name == name), None)
         if relic is not None:
             self.relic = relic
-            self.data.load([relic])
-            self.render()
+            self.shown()
+
+    def shown(self) -> None:
+        if self.relic is not None and self.isVisible():
+            self.data.load([self.relic])
+        self.render()
 
     def show_relic(self, name: str) -> None:
         self.search.setText(name.replace(" Relic", ""))
@@ -368,11 +379,7 @@ class RelicSection(Section):
         layout.addWidget(self.pages, 1)
 
     def page_shown(self, key: str) -> None:
-        page = self.page(key)
-        if isinstance(page, RelicTablePage):
-            page.shown()
-        else:
-            page.render()
+        self.page(key).shown()
 
     def show_relic(self, name: str) -> None:
         self.show_page("lookup")

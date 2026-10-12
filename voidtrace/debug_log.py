@@ -59,13 +59,20 @@ def running_processes() -> Iterator[tuple[int, str]]:
         return
     psapi, kernel32 = ctypes.WinDLL("psapi"), ctypes.WinDLL("kernel32")
     kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
+                                                    ctypes.POINTER(wintypes.DWORD)]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
     pids = (wintypes.DWORD * 4096)()
     used = wintypes.DWORD()
     if not psapi.EnumProcesses(pids, ctypes.sizeof(pids), ctypes.byref(used)):
         return
     name = ctypes.create_unicode_buffer(1024)
     for pid in pids[: used.value // ctypes.sizeof(wintypes.DWORD)]:
-        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        try:
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        except (OSError, ctypes.ArgumentError):
+            continue
         if not handle:
             continue
         try:

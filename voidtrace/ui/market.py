@@ -186,6 +186,8 @@ class MarketSection(Section):
         self.rank.setVisible(item.max_rank is not None)
         self.rank.blockSignals(False)
         self.post_panel.set_item(rank)
+        if self.current_page() not in ("buy", "sell"):
+            self.show_page("buy")  # the item is on Buy: from Trades or Alerts the pick looked lost
         self.refresh()
 
     def selected_rank(self) -> Optional[int]:

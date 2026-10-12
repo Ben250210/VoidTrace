@@ -177,6 +177,17 @@ class JsonPriceCache:
         except TypeError:  # entry written by an older schema
             return None
 
+    def get_many(self, slugs) -> dict[str, PriceStats]:
+        data = self._load()
+        out = {}
+        for slug in slugs:
+            try:
+                if data.get(slug):
+                    out[slug] = PriceStats(**data[slug])
+            except TypeError:  # entry written by an older schema
+                continue
+        return out
+
     def put(self, stats: PriceStats) -> None:
         with self._lock:
             data = self._load()
@@ -220,6 +231,16 @@ class PriceService:
     def cached(self, slug: str) -> Optional[PriceStats]:
         """Whatever the cache holds for `slug`, however old, without touching the network."""
         return self._cached(slug)
+
+    def cached_many(self, slugs) -> dict[str, PriceStats]:
+        """`cached` for many slugs with one read of the cache (the relic tables ask for ~600)."""
+        try:
+            if hasattr(self.cache, "get_many"):
+                return self.cache.get_many(slugs)
+            return {s: hit for s in slugs if (hit := self.cache.get(s)) is not None}
+        except Exception as exc:
+            log.warning("price cache read failed: %s", exc)
+            return {}
 
     def get_price(self, slug: str) -> Optional[PriceStats]:
         cached = self._cached(slug)

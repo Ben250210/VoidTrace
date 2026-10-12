@@ -107,7 +107,9 @@ class MainWindow(QWidget):
                 header.addChild(item)
                 self._items[f"{section}/{page}"] = item
         self.sidebar.expandAll()
+        self.sidebar.setItemsExpandable(False)  # a double-clicked header must not hide its pages
         self.sidebar.itemClicked.connect(self._clicked)
+        self.sidebar.currentItemChanged.connect(lambda item, _old: self._clicked(item) if item else None)
 
         self.account_button = QPushButton(objectName="account")
         self.account_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -160,6 +162,29 @@ class MainWindow(QWidget):
 
     def current_page(self) -> str:
         return self._current
+
+    def open_page(self, key: Optional[str] = None) -> None:
+        """Bring the window up, on `key` (e.g. "market/buy") or on the last page used."""
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self.show_page(key or self.current_page())
+
+    def open_item(self, slug: str) -> None:
+        """A reward card was clicked: Market > Buy on that item."""
+        self.open_page("market/buy")
+        self.market.open_item(slug)
+
+    def read_riven(self, frame) -> None:
+        """Ctrl+Shift+R in game: read the riven on this screenshot into Rivens > Price check."""
+        self.open_page("rivens/price")
+        self.with_rivens(lambda rivens: rivens.read_from_frame(frame))
+
+    def open_riven_draft(self, draft) -> None:
+        """The riven popup was clicked: Rivens > Price check on that riven, checked at once."""
+        self.open_page("rivens/price")
+        if draft is not None:
+            self.with_rivens(lambda rivens: (rivens.load_draft(draft), rivens.price_panel.run_check()))
 
     def sidebar_keys(self) -> list[str]:
         return list(self._items)
@@ -277,6 +302,12 @@ class MainWindow(QWidget):
             self.market.show_sign_in()
 
     # --- window ------------------------------------------------------------------------------------
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        section = self.stack.currentWidget()
+        if isinstance(section, Section) and section.current_page():
+            section.page_shown(section.current_page())  # pages wait until they are on screen to load
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)

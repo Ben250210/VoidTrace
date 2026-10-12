@@ -440,17 +440,17 @@ MARKET_DEMO_ITEM = ("primed_continuity", 10)
 
 
 def stage_market_window(offline: bool) -> Optional[dict]:
-    """Render the market window with live sellers; seller names are pixelated (they are other players)."""
+    """Render the Market section with live sellers; seller names are pixelated (they are other players)."""
     if offline:
         return None
     from PyQt6.QtWidgets import QApplication
 
     from voidtrace.items import load_catalog
-    from voidtrace.ui.market import MarketWindow
+    from voidtrace.ui.market import MarketSection
     from voidtrace.sellers import SellerService
 
     app = QApplication.instance() or QApplication([])
-    window = MarketWindow(load_catalog(), SellerService())
+    window = MarketSection(load_catalog(), SellerService())
     window.open_item(*MARKET_DEMO_ITEM)
     deadline = time.monotonic() + 15
     while window.table.rowCount() == 0 and time.monotonic() < deadline:

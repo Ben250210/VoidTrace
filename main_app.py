@@ -298,17 +298,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     window = MainWindow(market, RelicSection(reward_items, pipeline.prices), riven_data,
                         lambda data: RivenSection(*data, account=market.account))
 
-    def open_page(key: Optional[str] = None) -> None:
-        """Bring the VoidTrace window up, on `key` (e.g. "market/buy") or on the last page used."""
-        window.show()
-        window.raise_()
-        window.activateWindow()
-        window.show_page(key or window.current_page())
-
-    def read_riven(frame) -> None:
-        open_page("rivens/price")
-        window.with_rivens(lambda rivens: rivens.read_from_frame(frame))
-
     def riven_hotkey() -> None:
         """Ctrl+Shift+R: in game, read the riven on screen (Item Details view); else just open Rivens."""
         frame = None
@@ -318,15 +307,12 @@ def main(argv: Optional[list[str]] = None) -> int:
             except Exception as exc:
                 log.warning("riven capture failed: %s", exc)
         if frame is None:
-            open_page("rivens/price")
+            window.open_page("rivens/price")
         else:
-            read_riven(frame)
+            window.read_riven(frame)
 
     def open_riven_details(draft, _check) -> None:
-        """The popup was clicked: Rivens > Price check on that riven."""
-        open_page("rivens/price")
-        if draft is not None:
-            window.with_rivens(lambda rivens: (rivens.load_draft(draft), rivens.price_panel.run_check()))
+        window.open_riven_draft(draft)
 
     from voidtrace.riven_popup import RivenAssistant, RivenPopup
     from voidtrace.riven_watch import RivenScreenWatcher
@@ -352,8 +338,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     def open_card(slot: int) -> None:
         item = overlay.cards[slot].resolution.item
         if item is not None and item.slug is not None:
-            open_page("market/buy")
-            market.open_item(item.slug)
+            window.open_item(item.slug)
 
     overlay.card_clicked.connect(open_card)
     watcher = None
@@ -387,7 +372,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return ("FAIL: using the slower log file: another program (WFInfo, Overwolf, DebugView) "
                 "was reading the game's log when VoidTrace started")
 
-    tray = make_tray(app, open_page, game_log_status, toggle_riven_popup, toggle_trade_updates, toggle_online_status)
+    tray = make_tray(app, window.open_page, game_log_status, toggle_riven_popup, toggle_trade_updates, toggle_online_status)
     status_keeper.changed.connect(lambda text: tray.setToolTip(f"VoidTrace\n{text}"))
     status_keeper.start()
     riven_watcher.start()
@@ -415,7 +400,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     alert_watcher.found.connect(alert_found)
     tray.messageClicked.connect(tray_message_clicked)
     alert_watcher.start()
-    hotkey_filter = None if args.no_hotkey else hotkey.register(app, lambda: open_page("market/buy"))  # noqa: F841
+    hotkey_filter = None if args.no_hotkey else hotkey.register(app, lambda: window.open_page("market/buy"))  # noqa: F841
     riven_hotkey = None if args.no_hotkey else hotkey.register(  # noqa: F841
         app, riven_hotkey, key="R", hotkey_id=hotkey.RIVEN_HOTKEY_ID)
 
@@ -424,7 +409,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         if shot is None:
             print(f"could not read image: {args.riven_shot}", file=sys.stderr)
             return 1
-        read_riven(shot)
+        window.read_riven(shot)
 
     if args.demo is not None:
         frame = cv2.imread(str(args.demo))

@@ -40,8 +40,8 @@ class FakePrices:
         self.asked.append(slug)
         return SimpleNamespace(price=PRICES[slug])
 
-    def cached(self, slug):
-        return None
+    def cached_many(self, slugs):
+        return {}
 
 
 @pytest.fixture(scope="module")
@@ -64,6 +64,7 @@ def lookup(section, text):
 
 def test_lookup_shows_values_and_rewards(qapp):
     section = RelicSection(ITEMS, FakePrices(), [OPEN, CHEAP, OLD])
+    section.show()
     section.show_page("lookup")
     page = lookup(section, "axi z1")
     settle(qapp, section)
@@ -91,6 +92,7 @@ def test_search_by_reward_and_vaulted_label(qapp):
 def test_unvaulted_page_sorted_by_radiant(qapp):
     prices = FakePrices()
     section = RelicSection(ITEMS, prices, [CHEAP, OPEN, OLD])
+    section.show()
     section.show_page("unvaulted")
     settle(qapp, section)
     names = table_names(section.unvaulted)
@@ -100,6 +102,7 @@ def test_unvaulted_page_sorted_by_radiant(qapp):
 
 def test_squad_raises_the_value(qapp):
     section = RelicSection(ITEMS, FakePrices(), [OPEN])
+    section.show()
     section.show_page("lookup")
     section.lookup.pick("Axi Z1 Relic")
     settle(qapp, section)
@@ -121,6 +124,7 @@ def table_names(page):
 
 def loaded_section(qapp, relics, prices=None):
     section = RelicSection(ITEMS, prices or FakePrices(), relics)
+    section.show()  # pages load prices only while on screen
     section.show_page("unvaulted")
     section.show_page("vaulted")
     settle(qapp, section)
@@ -192,14 +196,15 @@ def test_cached_prices_show_before_fetch(qapp):
     gate = threading.Event()
 
     class Cached(FakePrices):
-        def cached(self, slug):
-            return SimpleNamespace(price=PRICES[slug])
+        def cached_many(self, slugs):
+            return {slug: SimpleNamespace(price=PRICES[slug]) for slug in slugs}
 
         def get_price(self, slug):
             gate.wait(3)
             return super().get_price(slug)
 
     section = RelicSection(ITEMS, Cached(), [OPEN])
+    section.show()
     section.show_page("unvaulted")
     qapp.processEvents()
     row = section.unvaulted.table
