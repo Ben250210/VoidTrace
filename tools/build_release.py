@@ -54,6 +54,7 @@ MARKET
   to copy the whisper, paste it in game chat. Sign in to Warframe.Market there to post and manage
   your own orders (your password is not saved). While signed in, a finished trade lowers or removes
   the matching order by itself, with an Undo button (tray > "Update orders after trades" to turn off).
+  The Trades tab lists every trade and the plat you made today, this week and overall.
 
 RIVENS
   Ctrl+Shift+R (or tray > Rivens) opens the riven window. With a riven open in the game's Item

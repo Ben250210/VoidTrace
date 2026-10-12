@@ -103,6 +103,8 @@ Sign in from the market window (**Sign in to Warframe.Market**) to post and mana
   lowers the matching order by the amount traded (items you gave lower your sell orders, items you
   received your buy orders), or removes it when none are left. A card at the top right shows what
   changed, with **Undo** for 10 seconds. Turn it off with tray > **Update orders after trades**.
+- **Trades** tab: every trade VoidTrace saw (signed in or not), newest first, with plat earned, spent
+  and net for today, the last 7 days and all time. Kept only on this PC (`trades.jsonl`).
 
 Warframe.Market has no OAuth for outside apps yet, so sign-in uses the same email + password login
 as the website (`POST /v1/auth/signin`), and orders go to the v2 order endpoints with the session

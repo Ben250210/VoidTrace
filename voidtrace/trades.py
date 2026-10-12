@@ -13,18 +13,23 @@ When you accept a trade, Warframe writes the confirmation dialog to its log, ove
 `TradeReader` turns that into a `Trade` once the success line arrives (a cancelled trade never
 writes it). `plan_changes` then finds your matching orders: what you gave lowers your sell orders,
 what you received lowers your buy orders. An order traded out completely is deleted; `undo` puts
-everything back. Nothing is changed in the game: this only reads its log.
+everything back. `TradeHistory` keeps every finished trade on this PC for the Trades tab.
+Nothing is changed in the game: this only reads its log.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import re
+import threading
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import Callable, Iterable, Optional, Sequence
 
 from .account import Account, MyOrder
-from .items import CatalogItem
+from .items import CatalogItem, default_cache_dir
 from .log_watcher import game_time
 
 log = logging.getLogger(__name__)
@@ -234,3 +239,84 @@ def summary(trade: Trade, changes: Sequence[OrderChange]) -> str:
     else:
         head = f"Traded with {trade.partner}"
     return "\n".join([head] + [c.describe() for c in changes])
+
+
+# --- history ----------------------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class TradeRecord:
+    time: datetime
+    trade: Trade
+
+    @property
+    def plat(self) -> int:
+        """Plat you came out with: + when you were paid, - when you paid."""
+        return self.trade.plat_got - self.trade.plat_given
+
+
+@dataclass(frozen=True)
+class Totals:
+    earned: int = 0
+    spent: int = 0
+    count: int = 0
+
+    @property
+    def net(self) -> int:
+        return self.earned - self.spent
+
+
+def _items_json(items: Iterable[TradeItem]) -> list[dict]:
+    return [{"name": i.name, "qty": i.quantity, "rank": i.rank} for i in items]
+
+
+def _items_from(data: Iterable[dict]) -> tuple[TradeItem, ...]:
+    return tuple(TradeItem(str(d["name"]), int(d.get("qty", 1)), d.get("rank")) for d in data)
+
+
+class TradeHistory:
+    """Every finished trade, one JSON line each, in %LOCALAPPDATA%/VoidTrace/trades.jsonl.
+    Kept on this PC only."""
+
+    def __init__(self, path: Optional[Path] = None) -> None:
+        self.path = path or default_cache_dir() / "trades.jsonl"
+        self._lock = threading.Lock()
+
+    def add(self, trade: Trade, when: Optional[datetime] = None) -> TradeRecord:
+        record = TradeRecord(when or datetime.now(), trade)
+        line = json.dumps({"time": record.time.isoformat(timespec="seconds"), "partner": trade.partner,
+                           "gave": _items_json(trade.gave), "got": _items_json(trade.got)})
+        with self._lock:
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.path, "a", encoding="utf-8") as fh:
+                    fh.write(line + "\n")
+            except OSError as exc:
+                log.warning("could not save the trade to the history: %s", exc)
+        return record
+
+    def load(self) -> list[TradeRecord]:
+        """Oldest first. Lines that cannot be read are skipped."""
+        try:
+            text = self.path.read_text(encoding="utf-8")
+        except OSError:
+            return []
+        records = []
+        for line in text.splitlines():
+            try:
+                d = json.loads(line)
+                records.append(TradeRecord(datetime.fromisoformat(d["time"]),
+                                           Trade(str(d["partner"]), _items_from(d["gave"]), _items_from(d["got"]))))
+            except (ValueError, KeyError, TypeError):
+                continue
+        return records
+
+
+def totals(records: Iterable[TradeRecord], since: Optional[datetime] = None) -> Totals:
+    earned = spent = count = 0
+    for r in records:
+        if since is not None and r.time < since:
+            continue
+        earned += r.trade.plat_got
+        spent += r.trade.plat_given
+        count += 1
+    return Totals(earned, spent, count)

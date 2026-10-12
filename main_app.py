@@ -387,6 +387,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     trades = trade_toast.TradeTracker(market.account, market.catalog, trade_toast.TradeToast(screen.geometry()),
                                       on_orders_changed=refresh_my_orders)
+    trades.recorded.connect(market.trades_panel.add)
 
     def toggle_trade_updates(on: bool) -> None:
         settings.put(trade_toast.SETTING, on)

@@ -18,7 +18,8 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidg
 from . import settings, theme
 from .account import Account
 from .items import CatalogItem
-from .trades import OrderChange, Trade, TradeReader, apply_changes, item_finder, plan_changes, summary, undo
+from .trades import (OrderChange, Trade, TradeHistory, TradeReader, apply_changes, item_finder, plan_changes,
+                     summary, undo)
 
 log = logging.getLogger(__name__)
 
@@ -103,9 +104,11 @@ class TradeTracker(QObject):
 
     applied = pyqtSignal(object, object)  # trade, the changes that went through
     note = pyqtSignal(str)
+    recorded = pyqtSignal(object)  # a TradeRecord, saved to the history
 
     def __init__(self, account: Account, catalog: Sequence[CatalogItem], toast: TradeToast,
-                 is_enabled: Callable[[], bool] = enabled, on_orders_changed: Callable[[], None] = lambda: None) -> None:
+                 is_enabled: Callable[[], bool] = enabled, on_orders_changed: Callable[[], None] = lambda: None,
+                 history: Optional[TradeHistory] = None) -> None:
         super().__init__()
         self.account = account
         self.find = item_finder(catalog)
@@ -113,6 +116,7 @@ class TradeTracker(QObject):
         self.is_enabled = is_enabled
         self.on_orders_changed = on_orders_changed
         self.reader = TradeReader()
+        self.history = history or TradeHistory()
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="VoidTrace-Trades")
         self.applied.connect(self._show)
         self.note.connect(self._note)
@@ -123,8 +127,12 @@ class TradeTracker(QObject):
         if trade is None:
             return
         log.info("trade with %s: gave %s; got %s", trade.partner, trade.gave, trade.got)
+        self.executor.submit(self.record, trade)  # kept whether or not orders are updated
         if self.is_enabled() and self.account.signed_in:
             self.executor.submit(self.handle, trade)
+
+    def record(self, trade: Trade) -> None:
+        self.recorded.emit(self.history.add(trade))
 
     def handle(self, trade: Trade) -> list[OrderChange]:
         try:

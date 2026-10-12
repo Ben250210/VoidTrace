@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -9,8 +10,8 @@ from PyQt6.QtWidgets import QApplication
 from voidtrace.account import MyOrder
 from voidtrace.items import CatalogItem
 from voidtrace.log_watcher import LogWatcher
-from voidtrace.trades import (OrderChange, Trade, TradeItem, TradeReader, apply_changes, item_finder,
-                              parse_item, plan_changes, summary, undo)
+from voidtrace.trades import (OrderChange, Totals, Trade, TradeHistory, TradeItem, TradeReader, TradeRecord,
+                              apply_changes, item_finder, parse_item, plan_changes, summary, totals, undo)
 
 # A real trade from EE.log (2026-10-11), the other player's name replaced.
 REAL_TRADE = """\
@@ -206,14 +207,14 @@ def qapp():
     return QApplication.instance() or QApplication([])
 
 
-def test_tracker_updates_orders_and_shows_undo(qapp):
+def test_tracker_updates_orders_and_shows_undo(qapp, tmp_path):
     from voidtrace.trade_toast import TradeToast, TradeTracker
 
     account = FakeAccount([order("r5", "id-hp", rank=5, quantity=3)])
     toast = TradeToast(QRect(0, 0, 1920, 1080))
     refreshed = []
     tracker = TradeTracker(account, CATALOG, toast, is_enabled=lambda: True,
-                           on_orders_changed=lambda: refreshed.append(1))
+                           on_orders_changed=lambda: refreshed.append(1), history=TradeHistory(tmp_path / "t.jsonl"))
     tracker.executor.submit = lambda fn, *a: fn(*a)  # run right away in the test
     for line in REAL_TRADE:
         tracker.feed(line)
@@ -229,13 +230,46 @@ def test_tracker_updates_orders_and_shows_undo(qapp):
     tracker.shutdown()
 
 
-def test_tracker_does_nothing_when_turned_off(qapp):
+def test_tracker_does_nothing_when_turned_off_but_still_records(qapp, tmp_path):
     from voidtrace.trade_toast import TradeToast, TradeTracker
 
     account = FakeAccount([order("r5", "id-hp", rank=5, quantity=3)])
-    tracker = TradeTracker(account, CATALOG, TradeToast(QRect(0, 0, 800, 600)), is_enabled=lambda: False)
+    account.signed_in = False
+    history = TradeHistory(tmp_path / "t.jsonl")
+    tracker = TradeTracker(account, CATALOG, TradeToast(QRect(0, 0, 800, 600)), is_enabled=lambda: False,
+                           history=history)
     tracker.executor.submit = lambda fn, *a: fn(*a)
     for line in REAL_TRADE:
         tracker.feed(line)
     assert account.calls == []
+    assert [r.trade.partner for r in history.load()] == ["TraderJoe"]
     tracker.shutdown()
+
+
+# --- history -----------------------------------------------------------------------------------------
+
+def test_history_round_trip_skips_bad_lines(tmp_path):
+    history = TradeHistory(tmp_path / "trades.jsonl")
+    sold = Trade("A", (TradeItem("Hollow Point", 1, 5),), (TradeItem("Platinum", 10),))
+    bought = Trade("B", (TradeItem("Platinum", 25),), (TradeItem("Forma Blueprint", 2),))
+    history.add(sold, datetime(2026, 10, 11, 9, 0))
+    with open(history.path, "a", encoding="utf-8") as fh:
+        fh.write('not json\n{"time": "x"}\n')
+    history.add(bought, datetime(2026, 10, 12, 9, 0))
+    records = history.load()
+    assert [r.trade for r in records] == [sold, bought]
+    assert [r.plat for r in records] == [10, -25]
+
+
+def test_missing_history_is_empty(tmp_path):
+    assert TradeHistory(tmp_path / "none.jsonl").load() == []
+
+
+def test_totals_since():
+    def rec(day, got=0, given=0):
+        return TradeRecord(datetime(2026, 10, day, 12), Trade("x", (TradeItem("Platinum", given),) if given else (),
+                                                              (TradeItem("Platinum", got),) if got else ()))
+    records = [rec(1, got=100), rec(10, got=30), rec(12, given=20), rec(12, got=5)]
+    assert totals(records) == Totals(135, 20, 4)
+    assert totals(records, since=datetime(2026, 10, 10)) == Totals(35, 20, 3)
+    assert totals(records, since=datetime(2026, 10, 12)).net == -15

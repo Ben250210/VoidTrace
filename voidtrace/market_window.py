@@ -207,10 +207,14 @@ class MarketWindow(QWidget):
 
         self.post_panel = PostOrderPanel(self)
         self.orders_panel = MyOrdersPanel(self)
+        from .trade_history_panel import TradeHistoryPanel
+
+        self.trades_panel = TradeHistoryPanel()
         self.tabs = QTabWidget()
         self.tabs.addTab(buy_tab, "Buy from players")
         self.tabs.addTab(self.post_panel, "Post order")
         self.tabs.addTab(self.orders_panel, "My orders")
+        self.tabs.addTab(self.trades_panel, "Trades")
         self.tabs.currentChanged.connect(self._tab_changed)
 
         layout = QVBoxLayout(self)
@@ -393,6 +397,8 @@ class MarketWindow(QWidget):
     def _tab_changed(self, index: int) -> None:
         if self.tabs.widget(index) is self.orders_panel:
             self.orders_panel.refresh()
+        elif self.tabs.widget(index) is self.trades_panel:
+            self.trades_panel.refresh()
 
     def closeEvent(self, event) -> None:  # noqa: N802
         # Closing only hides it; the app keeps running in the tray.
