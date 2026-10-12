@@ -77,6 +77,10 @@ ONLINE STATUS (optional, off by default)
   Tray > "Show me in game on Warframe.Market while playing": while signed in, your Warframe.Market
   status is "In game" while Warframe runs and goes back to what it was when the game closes.
 
+DISCORD (optional)
+  Sidebar > Discord: paste a webhook link from your own Discord server (Server Settings >
+  Integrations > Webhooks) to get new whispers, price alerts and trades there.
+
 SOMETHING WRONG?
   Right-click the tray icon > "Run self-test". It checks OCR, the internet connection and the game log.
   Right-click > "Open log folder" shows voidtrace.log; send that file when reporting a problem.

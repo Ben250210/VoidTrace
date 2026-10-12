@@ -73,7 +73,8 @@ class MainWindow(QWidget):
     _rivens_failed = pyqtSignal(str)
 
     def __init__(self, market: MarketSection, relics: RelicSection,
-                 load_riven_data: Callable[[], object], make_rivens: Callable[[object], Section]) -> None:
+                 load_riven_data: Callable[[], object], make_rivens: Callable[[object], Section],
+                 discord=None) -> None:
         super().__init__()
         self.setWindowTitle("VoidTrace")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint)
@@ -118,6 +119,10 @@ class MainWindow(QWidget):
         self.accent_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.accent_button.setMenu(accent_menu(self))
         self.accent_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.discord_button = QPushButton("Discord", objectName="account")
+        self.discord_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.discord_button.setVisible(discord is not None)
+        self.discord_button.clicked.connect(lambda: self._open_discord(discord))
 
         self.riven_placeholder = QLabel(objectName="muted", alignment=Qt.AlignmentFlag.AlignCenter, wordWrap=True)
         self.stack = QStackedWidget()
@@ -134,6 +139,7 @@ class MainWindow(QWidget):
         left.addWidget(self.sidebar, 1)
         left.addWidget(self.account_button)
         left.addWidget(self.accent_button)
+        left.addWidget(self.discord_button)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 10, 10)
         layout.addWidget(side)
@@ -276,6 +282,11 @@ class MainWindow(QWidget):
         self._riven_waiting.clear()
         self.riven_placeholder.setText(f"Could not load riven data from Warframe.Market: {message}\n\n"
                                        "Open a Rivens page again to retry.")
+
+    def _open_discord(self, notifier) -> None:
+        from .discord import DiscordDialog
+
+        DiscordDialog(self, notifier).exec()
 
     # --- account -----------------------------------------------------------------------------------
 

@@ -118,6 +118,14 @@ trade. It uses Warframe.Market's websocket (`@wfm|cmd/status/set`), opening a sh
 change. *In game* is set for one hour at a time and renewed every 30 minutes, so if VoidTrace crashes
 or the PC sleeps the status falls back by itself.
 
+## Discord notifications (optional)
+
+Get new whispers, price alerts and finished trades in your own Discord channel (and on your phone).
+In Discord: Server Settings > Integrations > Webhooks > New Webhook > pick a channel > **Copy Webhook
+URL**. In VoidTrace: **Discord** at the bottom of the sidebar > paste the link > **Send test**, and
+tick what to send. The link is kept in Windows Credential Manager. A new whisper also shows a Windows
+tray message: "New conversation with {name}" (the message text itself is not in the game's log).
+
 ## Accent colour
 
 **Accent colour** at the bottom of the sidebar (or in the tray menu): a preset (Void blue, Cyan,
