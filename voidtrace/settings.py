@@ -4,6 +4,7 @@
     disclaimer_ok      the user clicked "I understand" on the first-run warning
     trade_updates      lower / remove your Warframe.Market orders after a trade (default on)
     alerts             price alerts: [{slug, name, max_price, rank, ranked}] (alerts.py)
+    online_status      show you "in game" on Warframe.Market while Warframe runs (default off)
 """
 
 from __future__ import annotations

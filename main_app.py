@@ -26,8 +26,8 @@ from PyQt6.QtGui import QActionGroup, QColor
 from PyQt6.QtWidgets import QApplication, QColorDialog, QMenu, QMessageBox, QSystemTrayIcon
 
 from voidtrace.cv_cleaner import TesseractNotFound, capture_screen, warframe_is_foreground
-from voidtrace.debug_log import DebugChannelBusy, DebugLogSource
-from voidtrace import app_support, disclaimer, hotkey, settings, theme, trade_toast
+from voidtrace.debug_log import DebugChannelBusy, DebugLogSource, find_warframe_pid
+from voidtrace import app_support, disclaimer, hotkey, online_status, settings, theme, trade_toast
 from voidtrace.icons import voidtrace_logo
 from voidtrace.items import load_catalog, load_items
 from voidtrace.market_window import MarketWindow
@@ -144,7 +144,8 @@ def app_icon() -> QIcon:
 
 
 def make_tray(app: QApplication, open_market, game_log_status=lambda: None, open_rivens=None,
-              toggle_riven_popup=None, toggle_trade_updates=None, open_relics=None) -> QSystemTrayIcon:
+              toggle_riven_popup=None, toggle_trade_updates=None, open_relics=None,
+              toggle_online_status=None) -> QSystemTrayIcon:
     tray = QSystemTrayIcon(app_icon(), app)
     tray.setToolTip("VoidTrace")
     menu = QMenu()
@@ -163,6 +164,11 @@ def make_tray(app: QApplication, open_market, game_log_status=lambda: None, open
         trades_action.setCheckable(True)
         trades_action.setChecked(trade_toast.enabled())
         trades_action.toggled.connect(toggle_trade_updates)
+    if toggle_online_status is not None:
+        status_action = menu.addAction("Show me in game on Warframe.Market while playing")
+        status_action.setCheckable(True)
+        status_action.setChecked(online_status.enabled())
+        status_action.toggled.connect(toggle_online_status)
     add_accent_menu(menu)
     menu.addAction("Run self-test", lambda: show_self_test(game_log_status()))
     menu.addAction("Open log folder", lambda: _open_folder(app_support.log_path().parent))
@@ -405,6 +411,15 @@ def main(argv: Optional[list[str]] = None) -> int:
                                       on_orders_changed=refresh_my_orders)
     trades.recorded.connect(market.trades_panel.add)
 
+    status_keeper = online_status.StatusKeeper(
+        lambda: market.account.token if market.account.signed_in else None,
+        lambda: find_warframe_pid() is not None)
+
+    def toggle_online_status(on: bool) -> None:
+        settings.put(online_status.SETTING, on)
+        log.info("in-game status on Warframe.Market %s", "on" if on else "off")
+        status_keeper.tick()
+
     def toggle_trade_updates(on: bool) -> None:
         settings.put(trade_toast.SETTING, on)
         log.info("order updates after trades %s", "on" if on else "off")
@@ -418,7 +433,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                 "was reading the game's log when VoidTrace started")
 
     tray = make_tray(app, open_market, game_log_status, open_rivens, toggle_riven_popup, toggle_trade_updates,
-                     open_relics)
+                     open_relics, toggle_online_status)
+    status_keeper.changed.connect(lambda text: tray.setToolTip(f"VoidTrace\n{text}"))
+    status_keeper.start()
     riven_watcher.start()
     tray.showMessage("VoidTrace is running",
                      "Prices appear on relic reward screens (Borderless Fullscreen). Ctrl+Shift+M opens the market.",
@@ -483,6 +500,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         riven_assistant.shutdown()
         trades.shutdown()
         alert_watcher.shutdown()
+        status_keeper.stop()
         if relics_window is not None:
             relics_window.shutdown()
         if rivens is not None:

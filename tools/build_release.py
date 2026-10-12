@@ -71,6 +71,10 @@ SOMETHING WRONG?
 QUIT
   Right-click the tray icon > Quit VoidTrace.
 
+ONLINE STATUS (optional, off by default)
+  Tray > "Show me in game on Warframe.Market while playing": while signed in, your Warframe.Market
+  status is "In game" while Warframe runs and goes back to what it was when the game closes.
+
 RELICS
   Tray > Relics: a relic's average plat and ducat value per refinement (solo or squad of 4), its
   rewards, and the best relics you can farm now.
@@ -106,6 +110,7 @@ def run_pyinstaller(icon: Path) -> None:
         "--icon", str(icon),
         "--distpath", str(DIST), "--workpath", str(BUILD / "pyinstaller"), "--specpath", str(BUILD),
         "--hidden-import", "keyring.backends.Windows",
+        "--hidden-import", "websocket",  # imported lazily by online_status.py
         # Riven base values (tools/update_riven_bases.py), read next to voidtrace/rivens.py.
         "--add-data", f"{ROOT / 'voidtrace' / 'data'}{os.pathsep}voidtrace/data",
     ]

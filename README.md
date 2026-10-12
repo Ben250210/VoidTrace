@@ -112,6 +112,15 @@ token. The password is sent only to api.warframe.market and never stored; the to
 Windows Credential Manager (`keyring`) and removed by **Sign out**. Nothing is posted automatically;
 the only automatic change is lowering an order after a trade (above).
 
+## Online status (optional)
+
+Tray > **Show me in game on Warframe.Market while playing** (off by default). While you are signed
+in, VoidTrace sets your Warframe.Market status to *In game* when Warframe starts and puts back what
+you had (Online or Invisible) when it closes or when VoidTrace quits, so buyers only see you while you
+can trade. It uses Warframe.Market's websocket (`@wfm|cmd/status/set`), opening a short connection for
+each change. *In game* is set for one hour at a time and renewed every 30 minutes, so if VoidTrace
+crashes or the PC sleeps the status falls back by itself.
+
 ## Relic planner
 
 Tray > **Relics (which to open)**. Search a relic (`axi a1`) or a reward (`nikana prime`) to see its
