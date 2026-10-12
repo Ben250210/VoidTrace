@@ -51,7 +51,8 @@ class RelicPrices(QObject):
         self.requested: set[str] = set()  # fetched live, or being fetched
         self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="VoidTrace-Relics")
         self._price_ready.connect(self._on_price)
-        self._changed_soon = QTimer(self, singleShot=True, interval=250)
+        # Redraw at most every 1.5 s while prices stream in: redrawing 750 rows per price pinned a core.
+        self._changed_soon = QTimer(self, singleShot=True, interval=1500)
         self._changed_soon.timeout.connect(self.changed.emit)
 
     def item_for(self, reward: Reward) -> Optional[Item]:
@@ -115,7 +116,8 @@ class RelicPrices(QObject):
         self.pending.discard(slug)
         if price is not None or slug not in self.plat:  # keep a cached price if the fetch failed
             self.plat[slug] = price
-        self._changed_soon.start()
+        if not self._changed_soon.isActive():
+            self._changed_soon.start()
 
     def shutdown(self) -> None:
         self.executor.shutdown(wait=False, cancel_futures=True)
@@ -221,6 +223,7 @@ class RelicTablePage(QWidget):
         unknown.sort(key=lambda r: r["relic"].name)
         chest = QIcon(chest_icon(32, self.vaulted))
         tip = "Vaulted: no longer drops" if self.vaulted else "Drops now"
+        self.table.setUpdatesEnabled(False)  # one repaint for the whole table, not one per cell
         self.table.setRowCount(len(self.rows))
         for i, row in enumerate(known + unknown):
             relic = row["relic"]
@@ -234,6 +237,7 @@ class RelicTablePage(QWidget):
                 value, missing = row["values"][col]
                 self.table.setItem(i, col, make_cell(fmt(value, missing), right=True))
             self.table.setItem(i, self.BEST, make_cell(row["best"]))
+        self.table.setUpdatesEnabled(True)
         done, asked = self.data.progress()
         missing = any(row["values"][self.RADIANT][1] for row in self.rows)
         if asked - done:

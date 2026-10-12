@@ -58,30 +58,41 @@ def running_processes() -> Iterator[tuple[int, str]]:
     (EnumProcesses + QueryFullProcessImageNameW). Processes it may not open are skipped."""
     if sys.platform != "win32":
         return
-    psapi, kernel32 = ctypes.WinDLL("psapi"), ctypes.WinDLL("kernel32")
+    psapi = ctypes.WinDLL("psapi")
+    pids = (wintypes.DWORD * 4096)()
+    used = wintypes.DWORD()
+    if not psapi.EnumProcesses(pids, ctypes.sizeof(pids), ctypes.byref(used)):
+        return
+    for pid in pids[: used.value // ctypes.sizeof(wintypes.DWORD)]:
+        name = process_name(int(pid))
+        if name:
+            yield int(pid), name
+
+
+def process_name(pid: int) -> str:
+    """The exe file name of one process ("Warframe.x64.exe"), or "" when it cannot be read."""
+    if sys.platform != "win32" or not pid:
+        return ""
+    kernel32 = ctypes.WinDLL("kernel32")
     kernel32.OpenProcess.restype = wintypes.HANDLE
     kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
                                                     ctypes.POINTER(wintypes.DWORD)]
     kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
-    pids = (wintypes.DWORD * 4096)()
-    used = wintypes.DWORD()
-    if not psapi.EnumProcesses(pids, ctypes.sizeof(pids), ctypes.byref(used)):
-        return
-    name = ctypes.create_unicode_buffer(1024)
-    for pid in pids[: used.value // ctypes.sizeof(wintypes.DWORD)]:
-        try:
-            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
-        except (OSError, ctypes.ArgumentError):
-            continue
-        if not handle:
-            continue
-        try:
-            size = wintypes.DWORD(len(name))
-            if kernel32.QueryFullProcessImageNameW(handle, 0, name, ctypes.byref(size)):
-                yield int(pid), name.value.rsplit("\\", 1)[-1]
-        finally:
-            kernel32.CloseHandle(handle)
+    try:
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    except (OSError, ctypes.ArgumentError):
+        return ""
+    if not handle:
+        return ""
+    try:
+        name = ctypes.create_unicode_buffer(1024)
+        size = wintypes.DWORD(len(name))
+        if kernel32.QueryFullProcessImageNameW(handle, 0, name, ctypes.byref(size)):
+            return name.value.rsplit("\\", 1)[-1]
+        return ""
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def find_warframe_pid(processes: Optional[Callable[[], Iterable[tuple[int, str]]]] = None) -> Optional[int]:

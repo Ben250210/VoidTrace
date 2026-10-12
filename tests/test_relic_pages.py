@@ -219,3 +219,17 @@ def test_double_click_opens_lookup(qapp):
     section.vaulted.open_relic.emit("Meso Z3 Relic")
     assert section.current_page() == "lookup"
     assert section.lookup.relic.name == "Meso Z3 Relic"
+
+
+def test_prices_arriving_fast_redraw_at_most_once_per_interval(qapp):
+    from voidtrace.ui.relics import RelicPrices
+
+    data = RelicPrices(ITEMS, None)
+    redraws = []
+    data.changed.connect(lambda: redraws.append(1))
+    for i in range(50):  # 50 prices in a burst
+        data._on_price(f"slug{i}", 1.0)
+    timer = data._changed_soon
+    assert timer.isActive() and timer.interval() >= 1000  # one redraw later, not one per price
+    timer.timeout.emit()
+    assert redraws == [1]

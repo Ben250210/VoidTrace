@@ -317,11 +317,6 @@ def warframe_is_foreground(pid_finder: Optional[Callable[[], Optional[int]]] = N
     import ctypes
     from ctypes import wintypes
 
-    if pid_finder is None:
-        from .debug_log import find_warframe_pid as pid_finder
-    wf_pid = pid_finder()
-    if wf_pid is None:
-        return False
     user32 = ctypes.WinDLL("user32")
     user32.GetForegroundWindow.restype = wintypes.HWND
     user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
@@ -330,4 +325,10 @@ def warframe_is_foreground(pid_finder: Optional[Callable[[], Optional[int]]] = N
         return False
     pid = wintypes.DWORD()
     user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-    return pid.value == wf_pid
+    if pid_finder is not None:
+        return pid.value == pid_finder()
+    # Ask only about the window in front: listing every process took ~30 ms, every 0.7 s.
+    from .debug_log import process_name
+
+    name = process_name(pid.value).lower()
+    return name.startswith("warframe") and name.endswith(".exe")

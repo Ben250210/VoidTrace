@@ -108,3 +108,14 @@ def test_find_pid_skips_unreadable_processes():
 def test_find_pid_real_process_list_does_not_raise():
     result = find_warframe_pid()
     assert result is None or isinstance(result, int)
+
+
+def test_process_name_of_this_process():
+    import os
+    import sys
+
+    from voidtrace.debug_log import process_name
+
+    if sys.platform == "win32":
+        assert process_name(os.getpid()).lower().startswith("python")
+    assert process_name(0) in ("", None)
