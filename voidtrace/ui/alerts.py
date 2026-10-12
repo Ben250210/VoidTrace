@@ -1,4 +1,4 @@
-"""The market window's Alerts tab: your price alerts, with Delete. Add one from an item's
+"""The Market section's Alerts tab: your price alerts, with Delete. Add one from an item's
 "Alert me" button (see alerts.py for how they are checked)."""
 
 from __future__ import annotations

@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QApplication
 from voidtrace.hotkey import HOTKEY_ID, WM_HOTKEY, HotkeyFilter
 from voidtrace.items import CatalogItem, load_catalog, load_items
 from voidtrace.search import search_catalog
-from voidtrace.ui.market import MarketWindow
+from voidtrace.ui.market import MarketSection
 from voidtrace.sellers import SellerOrder, SellerService, parse_sellers, whisper_text
 
 
@@ -204,7 +204,7 @@ def _wait(qapp, predicate, timeout=2.0):
 def test_clicking_a_seller_copies_the_whisper(qapp):
     rows = [SellerOrder("Kosmo", "ingame", 45, 1, 10, 49, ""), SellerOrder("Ayla_09", "online", 48, 3, 10, 12, "")]
     sellers = FakeSellers(rows)
-    window = MarketWindow(CATALOG, sellers)
+    window = MarketSection(CATALOG, sellers)
     window.open_item("primed_continuity")
     _wait(qapp, lambda: window.table.rowCount() == 2)
     assert sellers.asked[-1] == ("primed_continuity", None, True)  # any rank, like warframe.market
@@ -224,7 +224,7 @@ def test_clicking_a_seller_copies_the_whisper(qapp):
 
 
 def test_unranked_item_hides_rank_controls(qapp):
-    window = MarketWindow(CATALOG, FakeSellers([SellerOrder("Kosmo", "ingame", 4, 1, None, 0, "")]))
+    window = MarketSection(CATALOG, FakeSellers([SellerOrder("Kosmo", "ingame", 4, 1, None, 0, "")]))
     window.open_item("burston_prime_blueprint")
     _wait(qapp, lambda: window.table.rowCount() == 1)
     assert not window.rank.isVisibleTo(window)
@@ -235,7 +235,7 @@ def test_unranked_item_hides_rank_controls(qapp):
 
 
 def test_typing_shows_suggestions_and_enter_opens_the_top_one(qapp):
-    window = MarketWindow(CATALOG, FakeSellers([]))
+    window = MarketSection(CATALOG, FakeSellers([]))
     window.show()
     window._on_search("primed cont")
     assert window.suggestions.count() >= 1
@@ -270,7 +270,7 @@ def _signed_in_window(qapp, top):
     sellers = FakeSellers([])
     sellers.client = http
     catalog = CATALOG + [CatalogItem("Necramech Fury", "necramech_fury", 3, ("mod",), "5f4ed3f9d5c36d0086f55b0a")]
-    window = MarketWindow(catalog, sellers, account=acc)
+    window = MarketSection(catalog, sellers, account=acc)
     return window, http
 
 
@@ -310,10 +310,9 @@ def test_buy_side_matches_highest_buyer(qapp):
 
 
 def test_signed_out_post_button_asks_to_sign_in(qapp):
-    window = MarketWindow(CATALOG, FakeSellers([]))
+    window = MarketSection(CATALOG, FakeSellers([]))
     assert not window.account.signed_in
     assert window.post_panel.post.text() == "Sign in to post"
-    assert window.account_button.text() == "Sign in to Warframe.Market"
     window.shutdown()
 
 
@@ -434,7 +433,7 @@ def test_mouse_wheel_does_not_change_the_rank_picker(qapp):
     from PyQt6.QtCore import QPoint, QPointF, Qt
     from PyQt6.QtGui import QWheelEvent
 
-    window = MarketWindow(CATALOG, FakeSellers([SellerOrder("Kosmo", "ingame", 45, 1, 10, 49, "")]))
+    window = MarketSection(CATALOG, FakeSellers([SellerOrder("Kosmo", "ingame", 45, 1, 10, 49, "")]))
     window.open_item("primed_continuity")
     window.rank.setCurrentIndex(3)
     wheel = QWheelEvent(QPointF(5, 5), QPointF(5, 5), QPoint(0, 0), QPoint(0, -120), Qt.MouseButton.NoButton,

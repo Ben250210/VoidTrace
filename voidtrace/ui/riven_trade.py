@@ -1,4 +1,4 @@
-"""Selling rivens from the riven window (signed in to Warframe.Market):
+"""Selling rivens from the Rivens section (signed in to Warframe.Market):
 
   * SellPanel       - post a riven auction, filled in from the price check, with one click
   * MyRivensPanel   - your open riven auctions: show/hide, match the cheapest comparable, close
@@ -31,7 +31,7 @@ from .widgets import Stepper, make_cell, make_table
 from .widgets import BUFF_COLOR, CURSE_COLOR, MUTED
 
 if TYPE_CHECKING:
-    from .rivens import RivenWindow
+    from .rivens import RivenSection
 
 
 def _error_text(exc: Exception) -> str:
@@ -41,7 +41,7 @@ def _error_text(exc: Exception) -> str:
 
 
 class SellPanel(QWidget):
-    def __init__(self, window: "RivenWindow") -> None:
+    def __init__(self, window: "RivenSection") -> None:
         super().__init__()
         self.window_ = window
         self.draft: Optional[RivenDraft] = None
@@ -166,7 +166,7 @@ class MyRivensPanel(QWidget):
     SORTABLE = {EYE, RIVEN, PRICE}
     HEADER_TEXT = {EYE: "", RIVEN: "Riven", PRICE: "Price"}
 
-    def __init__(self, window: "RivenWindow") -> None:
+    def __init__(self, window: "RivenSection") -> None:
         super().__init__()
         self.window_ = window
         self.auctions: list[RivenAuction] = []

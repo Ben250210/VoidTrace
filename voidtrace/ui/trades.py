@@ -1,4 +1,4 @@
-"""The market window's Trades tab: every trade VoidTrace saw in the game log, and the plat it made.
+"""The Market section's Trades tab: every trade VoidTrace saw in the game log, and the plat it made.
 
 Rows come from `TradeHistory` (trades.py), newest first. The top line sums plat earned, spent and
 net for today, the last 7 days and all time. The history stays on this PC.

@@ -37,7 +37,7 @@ from .widgets import BUFF_COLOR, CURSE_COLOR, STATUS_COLOR, STATUS_LABEL
 
 
 if TYPE_CHECKING:
-    from .rivens import RivenWindow
+    from .rivens import RivenSection
 
 log = logging.getLogger(__name__)
 
@@ -140,7 +140,7 @@ def refill_combo(box: QComboBox, stats, first: list[tuple[str, Optional[str]]]) 
 
 
 class FindPanel(QWidget):
-    def __init__(self, window: "RivenWindow") -> None:
+    def __init__(self, window: "RivenSection") -> None:
         super().__init__()
         self.window_ = window
         self.auctions: list[RivenAuction] = []

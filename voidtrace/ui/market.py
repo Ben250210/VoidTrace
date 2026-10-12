@@ -1,7 +1,7 @@
-"""Market window: search any item, see who is selling it right now, click a seller to copy the whisper,
-and (signed in) post and manage your own Warframe.Market orders.
+"""The Market section of the main window: search any item and see who sells it right now (click a seller
+to copy the whisper), post and manage your orders, your trade history, and price alerts.
 
-A normal clickable window (unlike the overlay), kept on top of Borderless Fullscreen Warframe.
+Pages: Buy (here), Sell and My orders (orders.py), Trades (trades.py), Alerts (alerts.py).
 """
 
 from __future__ import annotations
@@ -9,10 +9,9 @@ from __future__ import annotations
 import html
 
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Sequence
 
-from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -26,20 +25,18 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QPushButton,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from .. import theme
 from ..account import Account
 from ..icons import platinum_icon
 from ..items import CatalogItem
 from ..sellers import SellerOrder, SellerService, rank_counts, whisper_text
 from ..search import search_catalog
-from .widgets import STATUS_COLOR, STATUS_LABEL, STYLE
+from .widgets import STATUS_COLOR, STATUS_LABEL, Section
 
 log = logging.getLogger(__name__)
 
@@ -55,19 +52,15 @@ def item_title(item: CatalogItem) -> str:
     return f'{name} <span style="color:#8fa3c2; font-size:13px; font-weight:400">max rank {item.max_rank}</span>'
 
 
-class MarketWindow(QWidget):
+class MarketSection(Section):
+    PAGES = {"buy": "Buy", "sell": "Sell", "orders": "My orders", "trades": "Trades", "alerts": "Alerts"}
     _sellers_ready = pyqtSignal(int, list)
-    _async_done = pyqtSignal(object, object)  # (callback, result) run on the UI thread
     _sellers_failed = pyqtSignal(int, str)
     alerts_changed = pyqtSignal()
 
     def __init__(self, catalog: Sequence[CatalogItem], sellers: SellerService,
                  account: Optional[Account] = None) -> None:
         super().__init__()
-        self.setWindowTitle("VoidTrace market")
-        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint)
-        theme.follow(self, STYLE)
-        self.resize(640, 560)
         self.catalog = list(catalog)
         self.by_slug = {item.slug: item for item in self.catalog}
         self.by_id = {item.id: item for item in self.catalog if item.id}
@@ -76,7 +69,6 @@ class MarketWindow(QWidget):
         self.item: Optional[CatalogItem] = None
         self.rows: list[SellerOrder] = []
         self._request = 0
-        self._executor = ThreadPoolExecutor(max_workers=2)
 
         self.search = QLineEdit(placeholderText="Search an item, e.g. primed continuity")
         self.suggestions = QListWidget()
@@ -88,6 +80,7 @@ class MarketWindow(QWidget):
         # fixed width cut them to "Ran...(0)".
         self.rank.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.rank.view().setTextElideMode(Qt.TextElideMode.ElideNone)
+        self.rank.hide()  # shown once a ranked item is open
         self.online = QCheckBox("Include online sellers")
         self.online.setChecked(True)
         self.alert_button = QPushButton("Alert me\u2026")
@@ -108,17 +101,8 @@ class MarketWindow(QWidget):
         for col in range(1, len(COLUMNS)):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
         self.status = QLabel(objectName="muted")
-        self.toast = QLabel(objectName="toast")
-        self._toast_timer = QTimer(self, singleShot=True, interval=4000)
-        self._toast_timer.timeout.connect(lambda: self.toast.setText(""))
 
         from .orders import MyOrdersPanel, PostOrderPanel  # imported here: it imports this module's types
-
-        self.account_button = QPushButton(objectName="account")
-        self.account_button.clicked.connect(self._account_clicked)
-        search_row = QHBoxLayout()
-        search_row.addWidget(self.search, 1)
-        search_row.addWidget(self.account_button)
 
         controls = QHBoxLayout()
         controls.addWidget(self.title, 1)
@@ -141,21 +125,17 @@ class MarketWindow(QWidget):
         from .alerts import AlertsPanel
 
         self.alerts_panel = AlertsPanel(on_changed=self.alerts_changed.emit)
-        self.tabs = QTabWidget()
-        self.tabs.addTab(buy_tab, "Buy from players")
-        self.tabs.addTab(self.post_panel, "Post order")
-        self.tabs.addTab(self.orders_panel, "My orders")
-        self.tabs.addTab(self.trades_panel, "Trades")
-        self.tabs.addTab(self.alerts_panel, "Alerts")
-        self.tabs.currentChanged.connect(self._tab_changed)
+        for key, page in (("buy", buy_tab), ("sell", self.post_panel), ("orders", self.orders_panel),
+                          ("trades", self.trades_panel), ("alerts", self.alerts_panel)):
+            self.add_page(key, page)
 
         layout = QVBoxLayout(self)
-        layout.addLayout(search_row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.search)
         layout.addWidget(self.suggestions)
-        layout.addWidget(self.tabs, 1)
+        layout.addWidget(self.pages, 1)
         layout.addWidget(self.toast)
-        self._async_done.connect(lambda callback, result: callback(result))
-        self.account_changed()
+        self.refresh_account()
         from .widgets import guard_wheel
 
         self._wheel_guard = guard_wheel(self)  # scrolling over the rank picker changed the rank
@@ -206,9 +186,6 @@ class MarketWindow(QWidget):
         self.rank.setVisible(item.max_rank is not None)
         self.rank.blockSignals(False)
         self.post_panel.set_item(rank)
-        self.show()
-        self.raise_()
-        self.activateWindow()
         self.refresh()
 
     def selected_rank(self) -> Optional[int]:
@@ -305,8 +282,7 @@ class MarketWindow(QWidget):
         add_alert(alert)
         self.alerts_panel.refresh()
         self.alerts_changed.emit()
-        self.toast.setText(f"Alert set: {alert.label} at {price}p or less. Checked every minute.")
-        self._toast_timer.start()
+        self.show_toast(f"Alert set: {alert.label} at {price}p or less. Checked every minute.")
 
     # --- clipboard ---------------------------------------------------------------------
 
@@ -317,56 +293,21 @@ class MarketWindow(QWidget):
         if not (0 <= row < len(self.rows)) or self.item is None:
             return
         QApplication.clipboard().setText(self.whisper_for(row))
-        self.toast.setText(f"Copied whisper to {self.rows[row].ingame_name}. Paste it in game chat.")
-        self._toast_timer.start()
+        self.show_toast(f"Copied whisper to {self.rows[row].ingame_name}. Paste it in game chat.")
 
-    # --- account + background work -----------------------------------------------------
+    # --- pages and account ---------------------------------------------------------------
 
-    def run_async(self, fn, on_ok, on_err=None) -> None:
-        """Run `fn` off the UI thread; call on_ok(result) or on_err(exception) back on the UI thread."""
-        def work():
-            try:
-                self._async_done.emit(on_ok, fn())
-            except Exception as exc:  # reported to the panel that asked, never crashes the UI
-                log.warning("market request failed: %s", exc)
-                if on_err is not None:
-                    self._async_done.emit(on_err, exc)
-
-        self._executor.submit(work)
-
-    def account_changed(self) -> None:
-        if self.account.signed_in:
-            self.account_button.setText(f"Signed in as {self.account.ingame_name or 'you'}  \u00b7  Sign out")
-        else:
-            self.account_button.setText("Sign in to Warframe.Market")
+    def refresh_account(self) -> None:
         self.post_panel.update_price()
-        if self.tabs.currentWidget() is self.orders_panel:
+        if self.current_page() == "orders":
             self.orders_panel.refresh()
 
-    def show_sign_in(self) -> None:
-        from .orders import SignInDialog
-
-        SignInDialog(self).exec()
-
-    def _account_clicked(self) -> None:
-        if self.account.signed_in:
-            self.account.sign_out()
-            self.account_changed()
-        else:
-            self.show_sign_in()
-
-    def _tab_changed(self, index: int) -> None:
-        if self.tabs.widget(index) is self.orders_panel:
+    def page_shown(self, key: str) -> None:
+        if key == "orders":
             self.orders_panel.refresh()
-        elif self.tabs.widget(index) is self.trades_panel:
+        elif key == "trades":
             self.trades_panel.refresh()
-        elif self.tabs.widget(index) is self.alerts_panel:
+        elif key == "alerts":
             self.alerts_panel.refresh()
-
-    def closeEvent(self, event) -> None:  # noqa: N802
-        # Closing only hides it; the app keeps running in the tray.
-        event.ignore()
-        self.hide()
-
-    def shutdown(self) -> None:
-        self._executor.shutdown(wait=False, cancel_futures=True)
+        elif key == "buy":
+            self.search.setFocus()

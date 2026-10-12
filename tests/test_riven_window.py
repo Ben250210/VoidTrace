@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import QApplication
 
 from voidtrace import rivens
 from voidtrace.ui.riven_find import disposition_dots
-from voidtrace.ui.rivens import RivenWindow
+from voidtrace.ui.rivens import RivenSection
 from voidtrace.rivens import RivenAttr, RivenDraft, RivenService
 
 FIXTURES = Path(__file__).parent / "fixtures" / "rivens"
@@ -60,7 +60,7 @@ def _window():
     catalog = rivens.RivenCatalog(rivens.parse_weapons(_load("weapons.json")["data"]),
                                   rivens.parse_stats(_load("attributes.json")["data"]))
     client = FakeClient()
-    return RivenWindow(catalog, RivenService(client)), client
+    return RivenSection(catalog, RivenService(client)), client
 
 
 def _wait(qapp, predicate, timeout=2.0):
@@ -122,7 +122,7 @@ def test_price_check_from_a_typed_riven(qapp):
                        attrs=(RivenAttr("critical_chance", 120.5, True), RivenAttr("multishot", 80.0, True),
                               RivenAttr("zoom", -30.0, False)), mr=12, rolls=3)
     window.load_draft(draft)
-    assert window.tabs.currentWidget() is panel
+    assert window.pages.currentWidget() is panel
     assert panel.draft() == draft
     panel.run_check()
     _wait(qapp, lambda: panel.check is not None)

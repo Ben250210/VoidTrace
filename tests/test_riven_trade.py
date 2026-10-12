@@ -171,11 +171,11 @@ def _wait(qapp, predicate, timeout=2.0):
 
 
 def _window(catalog, account=None, http=None):
-    from voidtrace.ui.rivens import RivenWindow
+    from voidtrace.ui.rivens import RivenSection
 
     if account is None:
         account, http = signed_in()
-    return RivenWindow(catalog, RivenService(http), account=account), http
+    return RivenSection(catalog, RivenService(http), account=account), http
 
 
 def test_sell_from_the_price_check(qapp, catalog):
@@ -186,7 +186,7 @@ def test_sell_from_the_price_check(qapp, catalog):
     _wait(qapp, lambda: window.price_panel.check is not None)
     window.price_panel.sell_button.click()
     panel = window.sell_panel
-    assert window.tabs.currentWidget() is panel
+    assert window.pages.currentWidget() is panel
     assert panel.buyout.value() == round(window.price_panel.check.estimate)
     assert "Kulstar Critacan" in panel.summary.text() and panel.name_warning.text() == ""
     panel.buyout.setValue(321)
@@ -210,14 +210,13 @@ def test_signed_out_sell_button_asks_to_sign_in(qapp, catalog):
     window, _ = _window(catalog, account, FakeV1())
     window.open_sell(DRAFT, PriceCheck(100.0, 50, 200, 5, "same stats, no curse", ()))
     assert window.sell_panel.post_button.text() == "Sign in to post"
-    assert window.account_button.text() == "Sign in to Warframe.Market"
     window.shutdown()
 
 
 def test_my_rivens_toggle_reprice_and_close(qapp, catalog):
     window, http = _window(catalog)
     window.account.create_riven_auction(DRAFT, buyout=5000)
-    window.tabs.setCurrentWidget(window.my_rivens)
+    window.show_page("mine")
     panel = window.my_rivens
     _wait(qapp, lambda: panel.table.rowCount() == 1)
     assert panel.status.text() == "1 rivens"

@@ -41,7 +41,7 @@ from .riven_find import MAX_BUFFS, refill_combo, stat_combo, auction_table, fill
 
 
 if TYPE_CHECKING:
-    from .rivens import RivenWindow
+    from .rivens import RivenSection
 
 log = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class StatRow:
 class PricePanel(QWidget):
     sell_requested = pyqtSignal(object, object)  # (RivenDraft, PriceCheck)
 
-    def __init__(self, window: "RivenWindow") -> None:
+    def __init__(self, window: "RivenSection") -> None:
         super().__init__()
         self.window_ = window
         self.check: Optional[PriceCheck] = None

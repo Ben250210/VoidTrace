@@ -1,4 +1,4 @@
-"""Posting and managing your own Warframe.Market orders from the market window.
+"""Posting and managing your own Warframe.Market orders from the Market section.
 
   * SignInDialog    - email/username + password, sent only to Warframe.Market (see account.py)
   * PostOrderPanel  - top 5 sell/buy orders for one rank (like warframe.market's "Edit order"
@@ -33,21 +33,21 @@ from PyQt6.QtWidgets import (
 from .. import theme
 from ..account import MarketError, MyOrder, NotSignedIn, TopOrder, suggested_price, top_orders
 from ..icons import eye_icon, platinum_icon
-from .widgets import BUTTON_STYLE, Stepper, make_cell, make_table
+from .widgets import BUTTON_STYLE, STYLE, Stepper, make_cell, make_table
 
 if TYPE_CHECKING:
-    from .market import MarketWindow
+    from .market import MarketSection
 
 TOP_COLUMNS = ["Player", "Rep", "Price", "Rank", "Qty"]
 STATUS_DOT = {"ingame": QColor(124, 201, 156), "online": QColor(120, 185, 255)}
 
 
 class SignInDialog(QDialog):
-    def __init__(self, window: "MarketWindow") -> None:
+    def __init__(self, window: "MarketSection") -> None:
         super().__init__(window)
         self.window_ = window
         self.setWindowTitle("Sign in to Warframe.Market")
-        self.setStyleSheet(window.styleSheet() + theme.apply(BUTTON_STYLE))
+        self.setStyleSheet(theme.apply(STYLE + BUTTON_STYLE))
         self.email = QLineEdit(placeholderText="Email or username")
         self.password = QLineEdit(placeholderText="Password")
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
@@ -86,7 +86,7 @@ class SignInDialog(QDialog):
 
 
 class PostOrderPanel(QWidget):
-    def __init__(self, window: "MarketWindow") -> None:
+    def __init__(self, window: "MarketSection") -> None:
         super().__init__()
         self.window_ = window
         self.top: dict[str, list[TopOrder]] = {"sell": [], "buy": []}
@@ -275,7 +275,7 @@ class MyOrdersPanel(QWidget):
     COLUMNS = ["", "Item", "Type", "Rank", "Price", "Qty", "", ""]
     EYE, ITEM, TYPE, RANK, PRICE, QTY, MATCH, DELETE = range(8)
 
-    def __init__(self, window: "MarketWindow") -> None:
+    def __init__(self, window: "MarketSection") -> None:
         super().__init__()
         self.window_ = window
         self.orders: list[MyOrder] = []

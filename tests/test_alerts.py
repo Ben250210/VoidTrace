@@ -102,14 +102,14 @@ def test_watcher_keeps_going_when_one_item_fails(qapp):
 
 def test_market_window_adds_an_alert(qapp):
     from voidtrace.items import CatalogItem
-    from voidtrace.ui.market import MarketWindow
+    from voidtrace.ui.market import MarketSection
 
     class Acc:
         signed_in = False
         ingame_name = None
 
     item = CatalogItem("Volt Prime Set", "volt_prime_set", None, ("set",), "id-v")
-    window = MarketWindow([item], FakeSellers([]), account=Acc())
+    window = MarketSection([item], FakeSellers([]), account=Acc())
     window.item = item
     window.rows = [seller("A", 60), seller("Troll", 2, suspicious=True), seller("B", 58)]
     assert window.suggested_alert_price() == 57

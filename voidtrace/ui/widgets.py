@@ -1,11 +1,14 @@
 """Shared look and building blocks for every VoidTrace page: the stylesheets, table and cell helpers,
-the number box with -/+ buttons, the mouse-wheel guard, and the colours used across pages."""
+the number box with -/+ buttons, the mouse-wheel guard, the colours used across pages, and `Section`,
+the base of the Market, Rivens and Relics sections of the main window."""
 
 from __future__ import annotations
 
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
-from PyQt6.QtCore import QEvent, QObject, QSize, Qt
+from PyQt6.QtCore import QEvent, QObject, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -13,12 +16,16 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
     QSpinBox,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QToolButton,
     QWidget,
 )
+
+log = logging.getLogger(__name__)
 
 STYLE = """
 QWidget { background: #0b1220; color: #e6eefb; font-family: 'Segoe UI'; font-size: 13px; }
@@ -152,3 +159,78 @@ def make_cell(text: str, right: bool = False, icon=None, color: Optional[QColor]
     if color is not None:
         item.setForeground(color)
     return item
+
+
+class Section(QWidget):
+    """One part of the main window (Market, Rivens or Relics): a stack of pages, one shown at a time.
+
+    Subclasses fill `PAGES` (page key -> sidebar label, in order), call `add_page` for each, and
+    override `page_shown` (refresh a page when it appears) and `refresh_account` (after sign in/out).
+    Panels call `run_async` for network work, `show_toast` for a short message, `show_sign_in`, and
+    `account_changed` after signing in or out, which also tells the main window (`account_switched`).
+    """
+
+    PAGES: dict[str, str] = {}
+    _async_done = pyqtSignal(object, object)  # (callback, result), run on the UI thread
+    account_switched = pyqtSignal()
+    page_changed = pyqtSignal(str)  # a page key, when the section switches page itself
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.pages = QStackedWidget()
+        self._page_by_key: dict[str, QWidget] = {}
+        self.toast = QLabel(objectName="toast")
+        self._toast_timer = QTimer(self, singleShot=True, interval=4000)
+        self._toast_timer.timeout.connect(lambda: self.toast.setText(""))
+        self._executor = ThreadPoolExecutor(max_workers=2)
+        self._async_done.connect(lambda callback, result: callback(result))
+
+    def add_page(self, key: str, widget: QWidget) -> None:
+        self._page_by_key[key] = widget
+        self.pages.addWidget(widget)
+
+    def page(self, key: str) -> QWidget:
+        return self._page_by_key[key]
+
+    def show_page(self, key: str) -> None:
+        self.pages.setCurrentWidget(self._page_by_key[key])
+        self.page_shown(key)
+        self.page_changed.emit(key)
+
+    def current_page(self) -> str:
+        current = self.pages.currentWidget()
+        return next((k for k, w in self._page_by_key.items() if w is current), "")
+
+    def page_shown(self, key: str) -> None:
+        """A page came into view (override to refresh it)."""
+
+    def refresh_account(self) -> None:
+        """Signed in or out (override to update the pages)."""
+
+    def account_changed(self) -> None:
+        self.refresh_account()
+        self.account_switched.emit()
+
+    def show_sign_in(self) -> None:
+        from .orders import SignInDialog
+
+        SignInDialog(self).exec()
+
+    def show_toast(self, text: str) -> None:
+        self.toast.setText(text)
+        self._toast_timer.start()
+
+    def run_async(self, fn, on_ok, on_err=None) -> None:
+        """Run `fn` off the UI thread; call on_ok(result) or on_err(exception) back on the UI thread."""
+        def work():
+            try:
+                self._async_done.emit(on_ok, fn())
+            except Exception as exc:  # reported to the page that asked, never crashes the UI
+                log.warning("%s request failed: %s", type(self).__name__, exc)
+                if on_err is not None:
+                    self._async_done.emit(on_err, exc)
+
+        self._executor.submit(work)
+
+    def shutdown(self) -> None:
+        self._executor.shutdown(wait=False, cancel_futures=True)
