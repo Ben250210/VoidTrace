@@ -124,7 +124,7 @@ def run_pyinstaller(icon: Path) -> None:
     # Optional extras of our dependencies that VoidTrace never uses (pytesseract's pandas output,
     # keyring's Linux backends, ...). Excluding them cuts the download by about 100 MB.
     for module in ("pytest", "tkinter", "pandas", "pyarrow", "cryptography", "secretstorage", "jeepney",
-                   "matplotlib", "scipy", "IPython", "PIL.ImageQt"):
+                   "matplotlib", "scipy", "IPython", "PIL.ImageQt", "psutil"):
         cmd += ["--exclude-module", module]
     subprocess.run(cmd, check=True, cwd=ROOT)
 

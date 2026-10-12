@@ -230,3 +230,10 @@ def test_search_from_trades_page_shows_buy(qapp):
     window.market.open_item("volt_prime_set")
     assert window.market.current_page() == "buy"
     assert window.current_page() == "market/buy"
+
+
+def test_window_opens_maximized(qapp):
+    window, _ = make_window()
+    window.open_page("market/buy")
+    assert window.windowState() & Qt.WindowState.WindowMaximized
+    window.hide()

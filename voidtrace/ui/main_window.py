@@ -188,8 +188,8 @@ class MainWindow(QWidget):
         return self._current
 
     def open_page(self, key: Optional[str] = None) -> None:
-        """Bring the window up, on `key` (e.g. "market/buy") or on the last page used."""
-        self.show()
+        """Bring the window up, maximized, on `key` (e.g. "market/buy") or on the last page used."""
+        self.showMaximized()
         self.raise_()
         self.activateWindow()
         self.show_page(key or self.current_page())
@@ -345,7 +345,8 @@ class MainWindow(QWidget):
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
-        self._save_size.start()
+        if not self.isMaximized():  # remember the size it is put back to, not the maximized one
+            self._save_size.start()
 
     def closeEvent(self, event) -> None:  # noqa: N802
         event.ignore()  # closing only hides it; VoidTrace keeps running in the tray
