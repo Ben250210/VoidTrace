@@ -163,12 +163,16 @@ class JsonPriceCache:
     def __init__(self, path: Optional[Path] = None) -> None:
         self.path = path or default_cache_dir() / "prices.json"
         self._lock = threading.Lock()  # prices are fetched in parallel threads
+        self._data: Optional[dict[str, dict]] = None  # the file, read once, then kept in step by put()
 
     def _load(self) -> dict[str, dict]:
-        try:
-            return json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return {}
+        with self._lock:
+            if self._data is None:
+                try:
+                    self._data = json.loads(self.path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    self._data = {}
+            return self._data
 
     def get(self, slug: str) -> Optional[PriceStats]:
         entry = self._load().get(slug)
@@ -189,8 +193,8 @@ class JsonPriceCache:
         return out
 
     def put(self, stats: PriceStats) -> None:
+        data = self._load()
         with self._lock:
-            data = self._load()
             data[stats.slug] = asdict(replace(stats, stale=False))
             self.path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.path.with_suffix(".tmp")

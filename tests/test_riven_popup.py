@@ -202,3 +202,28 @@ def test_a_failed_re_read_keeps_the_good_one(qapp, catalog):
     qapp.processEvents()
     assert popup.draft == DRAFT and popup.isVisible()
     assistant.shutdown()
+
+
+# --- only the screen centre is grabbed while no card is showing ------------------------------
+
+@pytest.mark.parametrize("key", list(EXPECTED))
+def test_card_is_found_from_the_centre_alone(key):
+    from voidtrace.cv_cleaner import centre_region
+    from voidtrace.riven_watch import PEEK
+
+    frame = screen(key)
+    h, w = frame.shape[:2]
+    x, y, rw, rh = centre_region(w, h, *PEEK)
+    peek = np.zeros_like(frame)
+    peek[y:y + rh, x:x + rw] = frame[y:y + rh, x:x + rw]
+    assert rw * rh <= w * h / 6  # a small part of the screen
+    assert detect_card(peek) is (CYCLE if key in CYCLE_CARDS else ITEM_DETAILS)
+
+
+def test_watcher_grabs_the_full_screen_only_when_a_card_is_there(qapp):
+    full = []
+    empty = np.zeros((1600, 2560, 3), dtype=np.uint8)
+    watcher = RivenScreenWatcher(lambda: full.append(1) or empty, peek=lambda: empty)
+    for _ in range(5):
+        watcher.tick()
+    assert full == []

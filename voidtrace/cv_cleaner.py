@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -257,13 +258,33 @@ def ocr(binary: np.ndarray, psm: int = 6) -> str:
 
 # --- capture + pipeline ------------------------------------------------------
 
-def capture_screen(monitor: int = 1) -> np.ndarray:
-    """Grab one monitor as a BGR image. Read-only screen capture; touches nothing in the game."""
+def centre_region(width: int, height: int, fw: float, fh: float) -> tuple[int, int, int, int]:
+    """(x, y, w, h) of the centred part of a screen that is `fw` of its width and `fh` of its height."""
+    w, h = int(width * fw), int(height * fh)
+    return (width - w) // 2, (height - h) // 2, w, h
+
+
+_grabbers = threading.local()  # one screen grabber per thread (they are not shared across threads)
+
+
+def capture_screen(monitor: int = 1, centre: Optional[tuple[float, float]] = None) -> np.ndarray:
+    """Grab one monitor as a BGR image. Read-only screen capture; touches nothing in the game.
+
+    `centre=(fw, fh)` grabs only that centred part (the rest of the image stays black): a full
+    2560x1600 grab takes ~55 ms, the centre eighth a fraction of that."""
     import mss
 
-    with mss.mss() as sct:
-        shot = np.asarray(sct.grab(sct.monitors[monitor]))
-    return cv2.cvtColor(shot, cv2.COLOR_BGRA2BGR)
+    sct = getattr(_grabbers, "sct", None)
+    if sct is None:
+        sct = _grabbers.sct = (getattr(mss, "MSS", None) or mss.mss)()
+    mon = sct.monitors[monitor]
+    if centre is None:
+        return cv2.cvtColor(np.asarray(sct.grab(mon)), cv2.COLOR_BGRA2BGR)
+    x, y, w, h = centre_region(mon["width"], mon["height"], *centre)
+    part = np.asarray(sct.grab({"left": mon["left"] + x, "top": mon["top"] + y, "width": w, "height": h}))
+    frame = np.zeros((mon["height"], mon["width"], 3), dtype=np.uint8)
+    frame[y:y + h, x:x + w] = part[:, :, :3]
+    return frame
 
 
 def read_reward_texts(

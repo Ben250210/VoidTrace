@@ -306,7 +306,7 @@ def test_close_during_capture_delay_cancels_capture(qapp):
 
 def _fading_frame(alpha: float, seed: int) -> np.ndarray:
     """Reward band with names at `alpha` opacity over a background that changes every grab."""
-    from voidtrace.cv_cleaner import reward_band, reward_slots
+    from voidtrace.cv_cleaner import reward_slots
 
     rng = np.random.default_rng(seed)
     frame = rng.integers(20, 90, (1080, 1920), dtype=np.uint8)           # moving background

@@ -8,7 +8,7 @@ import pytest
 from PyQt6.QtWidgets import QApplication
 
 from voidtrace.ui.trades import TradeHistoryPanel, items_text
-from voidtrace.trades import Trade, TradeHistory, TradeItem, TradeRecord
+from voidtrace.trades import Trade, TradeHistory, TradeItem
 
 NOW = datetime(2026, 10, 12, 18, 0)
 

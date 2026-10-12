@@ -1,7 +1,5 @@
 import time
 
-import pytest
-
 from voidtrace.price_cleaner import (
     JsonPriceCache,
     PriceService,
@@ -219,3 +217,17 @@ def test_cached_ignores_age_and_never_fetches(tmp_path):
     service = PriceService(client, cache)
     assert service.cached("nekros_prime_blueprint").price == 30.0
     assert service.cached("unknown_item") is None
+
+
+def test_json_cache_reads_the_file_once(tmp_path, monkeypatch):
+    path = tmp_path / "p.json"
+    JsonPriceCache(path).put(make_stats("a", 1.0))
+    cache = JsonPriceCache(path)
+    reads = []
+    real = path.read_text
+    monkeypatch.setattr(type(path), "read_text", lambda self, *a, **k: reads.append(1) or real(*a, **k))
+    for _ in range(5):
+        assert cache.get("a").price == 1.0
+    cache.put(make_stats("b", 2.0))
+    assert cache.get_many(["a", "b"])["b"].price == 2.0
+    assert len(reads) == 1

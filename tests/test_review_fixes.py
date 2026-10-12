@@ -43,7 +43,7 @@ def test_tools_import_only_existing_voidtrace_names(script):
 
 # --- 1 + 2: relic prices: one cache read, nothing fetched while hidden --------------------------------
 
-from tests.test_relic_pages import ITEMS, OLD, OPEN, PRICES, FakePrices  # noqa: E402
+from tests.test_relic_pages import ITEMS, OLD, OPEN, FakePrices  # noqa: E402
 from voidtrace.ui.relics import RelicSection  # noqa: E402
 
 

@@ -36,6 +36,7 @@ EMBLEMS = ((ITEM_DETAILS, (-22, -162, 44, 32), DATA / "emblem_item_details.png")
 EMBLEM_SIZE = (64, 48)
 MATCH_MIN = 0.7          # positives 0.80-1.00, other screens <= 0.44
 INTERVAL_MS = 700
+PEEK = (0.25, 0.5)       # the centred part of the screen holding both emblems: grabbed while no card shows
 CHANGE_MIN = 0.35        # text-shape difference (1 - overlap) that counts as a different card
 SETTLE_GRABS = 2         # grabs that must agree before a first card is read
 CHANGE_GRABS = 3         # ... and before a changed card is read again
@@ -91,9 +92,10 @@ class RivenScreenWatcher(QObject):
     card_back = pyqtSignal()                  # the card just announced is showing again: no new read
 
     def __init__(self, grab: Callable[[], np.ndarray], foreground: Optional[Callable[[], bool]] = None,
-                 interval_ms: int = INTERVAL_MS) -> None:
+                 interval_ms: int = INTERVAL_MS, peek: Optional[Callable[[], np.ndarray]] = None) -> None:
         super().__init__()
         self.grab = grab
+        self.peek = peek  # a cheap grab of the PEEK centre, to look for the emblem before a full grab
         self.foreground = foreground
         self.timer = QTimer(self, interval=interval_ms)
         self.timer.timeout.connect(self.tick)
@@ -116,8 +118,10 @@ class RivenScreenWatcher(QObject):
             if self.foreground is not None and not self.foreground():
                 self._miss()
                 return
-            frame = self.grab()
+            frame = (self.peek or self.grab)()
             layout = detect_card(frame)
+            if layout is not None and self.peek is not None:
+                frame = self.grab()  # a card is there: the full screen, for its text
         except Exception as exc:  # a failed grab must not stop the watcher
             log.debug("riven watch: %s", exc)
             return

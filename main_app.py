@@ -250,7 +250,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.self_test:
         return 0 if show_self_test() else 1
 
-    if not settings.get("disclaimer_ok") and not show_disclaimer(first_run=True):
+    first_launch = not settings.get("disclaimer_ok")
+    if first_launch and not show_disclaimer(first_run=True):
         return 0
     instance_lock = app_support.acquire_single_instance()  # noqa: F841 (held until exit)
     if instance_lock is None:
@@ -318,7 +319,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         window.open_riven_draft(draft)
 
     from voidtrace.riven_popup import RivenAssistant, RivenPopup
-    from voidtrace.riven_watch import RivenScreenWatcher
+    from voidtrace.riven_watch import PEEK, RivenScreenWatcher
 
     riven_popup = RivenPopup(screen.geometry())
     theme.on_change(lambda: (riven_popup.update(), overlay.update()))  # painted in the accent
@@ -326,7 +327,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                                      lambda: market.account.ingame_name if market.account.signed_in else None,
                                      open_riven_details)
     riven_watcher = RivenScreenWatcher(lambda: capture_screen(args.monitor),
-                                       None if args.any_window else warframe_is_foreground)
+                                       None if args.any_window else warframe_is_foreground,
+                                       peek=lambda: capture_screen(args.monitor, centre=PEEK))
     riven_watcher.card_shown.connect(riven_assistant.card_shown)
     riven_watcher.card_hidden.connect(riven_assistant.card_hidden)
     riven_watcher.card_back.connect(riven_assistant.card_back)
@@ -383,6 +385,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     status_keeper.changed.connect(lambda text: tray.setToolTip(f"VoidTrace\n{text}"))
     status_keeper.start()
     riven_watcher.start()
+    if first_launch:
+        window.open_page("market/buy")  # a new user sees the app, not just an icon in the tray
     tray.showMessage("VoidTrace is running",
                      "Prices appear on relic reward screens (Borderless Fullscreen). Click this icon to open VoidTrace.",
                      app_icon(), 7000)
