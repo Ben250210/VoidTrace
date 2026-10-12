@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -137,6 +138,7 @@ class MarketWindow(QWidget):
     _sellers_ready = pyqtSignal(int, list)
     _async_done = pyqtSignal(object, object)  # (callback, result) run on the UI thread
     _sellers_failed = pyqtSignal(int, str)
+    alerts_changed = pyqtSignal()
 
     def __init__(self, catalog: Sequence[CatalogItem], sellers: SellerService,
                  account: Optional[Account] = None) -> None:
@@ -167,6 +169,10 @@ class MarketWindow(QWidget):
         self.rank.view().setTextElideMode(Qt.TextElideMode.ElideNone)
         self.online = QCheckBox("Include online sellers")
         self.online.setChecked(True)
+        self.alert_button = QPushButton("Alert me\u2026")
+        self.alert_button.setToolTip("Tell me when someone sells this at or under a price")
+        self.alert_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.alert_button.clicked.connect(self._ask_alert)
         self.table = QTableWidget(0, len(COLUMNS))
         self.table.setHorizontalHeaderLabels(COLUMNS)
         self.table.horizontalHeaderItem(3).setIcon(QIcon(platinum_icon(14)))
@@ -197,6 +203,7 @@ class MarketWindow(QWidget):
         controls.addWidget(self.title, 1)
         controls.addWidget(self.rank)
         controls.addWidget(self.online)
+        controls.addWidget(self.alert_button)
         buy_tab = QWidget()
         buy_layout = QVBoxLayout(buy_tab)
         buy_layout.setContentsMargins(0, 8, 0, 0)
@@ -210,11 +217,15 @@ class MarketWindow(QWidget):
         from .trade_history_panel import TradeHistoryPanel
 
         self.trades_panel = TradeHistoryPanel()
+        from .alerts_panel import AlertsPanel
+
+        self.alerts_panel = AlertsPanel(on_changed=self.alerts_changed.emit)
         self.tabs = QTabWidget()
         self.tabs.addTab(buy_tab, "Buy from players")
         self.tabs.addTab(self.post_panel, "Post order")
         self.tabs.addTab(self.orders_panel, "My orders")
         self.tabs.addTab(self.trades_panel, "Trades")
+        self.tabs.addTab(self.alerts_panel, "Alerts")
         self.tabs.currentChanged.connect(self._tab_changed)
 
         layout = QVBoxLayout(self)
@@ -347,6 +358,35 @@ class MarketWindow(QWidget):
         view.setMinimumWidth(view.sizeHintForColumn(0) + 24)
         self.rank.blockSignals(False)
 
+    # --- price alerts ------------------------------------------------------------------
+
+    def suggested_alert_price(self) -> int:
+        """One under the cheapest normal listing on show, so the alert means "cheaper than now"."""
+        prices = [s.platinum for s in self.rows if not s.suspicious]
+        return max(1, min(prices) - 1) if prices else 1
+
+    def _ask_alert(self) -> None:
+        if self.item is None:
+            return
+        rank = self.selected_rank()
+        label = self.item.name + (f" (rank {rank})" if rank is not None else "")
+        price, ok = QInputDialog.getInt(self, "Price alert",
+                                        f"Tell me when someone sells {label}\nfor this many platinum or less:",
+                                        self.suggested_alert_price(), 1, 100_000)
+        if ok:
+            self.add_alert(price)
+
+    def add_alert(self, price: int) -> None:
+        from .alerts import Alert, add_alert
+
+        rank = self.selected_rank()
+        alert = Alert(self.item.slug, self.item.name, int(price), rank, self.item.max_rank is not None)
+        add_alert(alert)
+        self.alerts_panel.refresh()
+        self.alerts_changed.emit()
+        self.toast.setText(f"Alert set: {alert.label} at {price}p or less. Checked every minute.")
+        self._toast_timer.start()
+
     # --- clipboard ---------------------------------------------------------------------
 
     def whisper_for(self, row: int) -> str:
@@ -399,6 +439,8 @@ class MarketWindow(QWidget):
             self.orders_panel.refresh()
         elif self.tabs.widget(index) is self.trades_panel:
             self.trades_panel.refresh()
+        elif self.tabs.widget(index) is self.alerts_panel:
+            self.alerts_panel.refresh()
 
     def closeEvent(self, event) -> None:  # noqa: N802
         # Closing only hides it; the app keeps running in the tray.

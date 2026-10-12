@@ -3,6 +3,7 @@
     accent             the theme's accent colour (see theme.py)
     disclaimer_ok      the user clicked "I understand" on the first-run warning
     trade_updates      lower / remove your Warframe.Market orders after a trade (default on)
+    alerts             price alerts: [{slug, name, max_price, rank, ranked}] (alerts.py)
 """
 
 from __future__ import annotations

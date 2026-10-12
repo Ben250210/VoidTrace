@@ -112,6 +112,14 @@ token. The password is sent only to api.warframe.market and never stored; the to
 Windows Credential Manager (`keyring`) and removed by **Sign out**. Nothing is posted automatically;
 the only automatic change is lowering an order after a trade (above).
 
+## Price alerts
+
+Open an item in the market window and click **Alert me…**: pick a price (it starts one below the
+cheapest seller). Every minute VoidTrace checks the sellers; when someone online lists it at or under
+your price, a tray message appears, and clicking it copies the whisper. Each seller and price is
+announced once. Listings far below everyone else (troll prices) are skipped. The **Alerts** tab lists
+your alerts with Delete.
+
 ## Rivens
 
 **Ctrl+Shift+R** (or tray > Rivens) opens the riven window. With a riven on screen, in

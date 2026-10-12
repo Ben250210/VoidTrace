@@ -406,6 +406,27 @@ def main(argv: Optional[list[str]] = None) -> int:
     tray.showMessage("VoidTrace is running",
                      "Prices appear on relic reward screens (Borderless Fullscreen). Ctrl+Shift+M opens the market.",
                      app_icon(), 7000)
+    from voidtrace.alerts import AlertWatcher
+    from voidtrace.sellers import whisper_text
+
+    alert_watcher = AlertWatcher(market.sellers,
+                                 lambda: market.account.ingame_name if market.account.signed_in else None)
+    market.alerts_changed.connect(alert_watcher.check_now)
+    pending_whisper: dict = {}
+
+    def alert_found(alert, seller) -> None:
+        pending_whisper["text"] = whisper_text(seller, alert.name, ranked=alert.ranked)
+        tray.showMessage(f"{alert.label}: {seller.platinum}p from {seller.ingame_name}",
+                         "Click here to copy the whisper, then paste it in game chat.", app_icon(), 10000)
+
+    def tray_message_clicked() -> None:
+        text = pending_whisper.pop("text", None)
+        if text:
+            QApplication.clipboard().setText(text)
+
+    alert_watcher.found.connect(alert_found)
+    tray.messageClicked.connect(tray_message_clicked)
+    alert_watcher.start()
     hotkey_filter = None if args.no_hotkey else hotkey.register(app, open_market)  # noqa: F841
     riven_hotkey = None if args.no_hotkey else hotkey.register(  # noqa: F841
         app, riven_hotkey, key="R", hotkey_id=hotkey.RIVEN_HOTKEY_ID)
@@ -444,6 +465,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         riven_watcher.stop()
         riven_assistant.shutdown()
         trades.shutdown()
+        alert_watcher.shutdown()
         if rivens is not None:
             rivens.shutdown()
         hotkey.unregister()
