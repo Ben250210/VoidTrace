@@ -8,7 +8,8 @@ from PyQt6.QtWidgets import QApplication
 
 from voidtrace.hotkey import HOTKEY_ID, WM_HOTKEY, HotkeyFilter
 from voidtrace.items import CatalogItem, load_catalog, load_items
-from voidtrace.market_window import MarketWindow, search_catalog
+from voidtrace.search import search_catalog
+from voidtrace.ui.market import MarketWindow
 from voidtrace.sellers import SellerOrder, SellerService, parse_sellers, whisper_text
 
 

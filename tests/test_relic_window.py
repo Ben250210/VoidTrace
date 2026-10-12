@@ -8,7 +8,7 @@ import pytest
 from PyQt6.QtWidgets import QApplication
 
 from voidtrace.items import Item
-from voidtrace.relic_window import RelicWindow
+from voidtrace.ui.relics import RelicWindow
 from voidtrace.relics import Relic, Reward
 
 OPEN = Relic("Axi Z1 Relic", False, (

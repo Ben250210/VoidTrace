@@ -22,7 +22,7 @@ from typing import Optional
 import cv2
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 from PyQt6.QtGui import QIcon
-from PyQt6.QtGui import QActionGroup, QColor
+from PyQt6.QtGui import QActionGroup
 from PyQt6.QtWidgets import QApplication, QColorDialog, QMenu, QMessageBox, QSystemTrayIcon
 
 from voidtrace.cv_cleaner import TesseractNotFound, capture_screen, warframe_is_foreground
@@ -30,7 +30,7 @@ from voidtrace.debug_log import DebugChannelBusy, DebugLogSource, find_warframe_
 from voidtrace import app_support, disclaimer, hotkey, online_status, settings, theme, trade_toast
 from voidtrace.icons import voidtrace_logo
 from voidtrace.items import load_catalog, load_items
-from voidtrace.market_window import MarketWindow
+from voidtrace.ui.market import MarketWindow
 from voidtrace.rivens import RivenService, load_riven_catalog
 from voidtrace.sellers import SellerService
 from voidtrace.log_watcher import LogTailer, LogWatcher, RewardScreenEvent, default_log_path
@@ -329,7 +329,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     def open_rivens() -> None:
         nonlocal rivens
         if rivens is None:
-            from voidtrace.riven_window import RivenWindow
+            from voidtrace.ui.rivens import RivenWindow
 
             try:
                 rivens = RivenWindow(*riven_data(), account=market.account)
@@ -347,7 +347,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     def open_relics() -> None:
         nonlocal relics_window
         if relics_window is None:
-            from voidtrace.relic_window import RelicWindow
+            from voidtrace.ui.relics import RelicWindow
 
             relics_window = RelicWindow(reward_items, pipeline.prices)
         relics_window.show()

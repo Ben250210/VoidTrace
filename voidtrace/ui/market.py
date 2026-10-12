@@ -32,98 +32,19 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from rapidfuzz import fuzz, process, utils
 
-from . import theme
-from .account import Account
-from .icons import platinum_icon
-from .items import CatalogItem
-from .sellers import SellerOrder, SellerService, rank_counts, whisper_text
+from .. import theme
+from ..account import Account
+from ..icons import platinum_icon
+from ..items import CatalogItem
+from ..sellers import SellerOrder, SellerService, rank_counts, whisper_text
+from ..search import search_catalog
+from .widgets import STATUS_COLOR, STATUS_LABEL, STYLE
 
 log = logging.getLogger(__name__)
 
-STYLE = """
-QWidget { background: #0b1220; color: #e6eefb; font-family: 'Segoe UI'; font-size: 13px; }
-QLineEdit, QComboBox { background: #111a2e; border: 1px solid #22314f; border-radius: 4px; padding: 5px 8px; }
-QLineEdit:focus { border-color: #4fa3ff; }
-QListWidget { background: #111a2e; border: 1px solid #22314f; }
-QListWidget::item:selected { background: #22314f; }
-QTableWidget { background: #0b1220; border: none; gridline-color: #16213a; }
-QTableWidget::item { padding: 4px; }
-QTableWidget::item:hover { background: #16213a; }
-QHeaderView::section { background: #0b1220; color: #8fa3c2; border: none; border-bottom: 1px solid #22314f;
-                       padding: 6px; font-size: 11px; font-weight: 600; }
-QLabel#title { font-size: 18px; font-weight: 600; }
-QLabel#toast { color: #7cc99c; }
-QLabel#muted { color: #8fa3c2; }
-QTabWidget::pane { border: none; border-top: 1px solid #22314f; }
-QTabBar::tab { background: #0b1220; color: #8fa3c2; padding: 7px 14px; border: none; }
-QTabBar::tab:selected { color: #e6eefb; border-bottom: 2px solid #4fa3ff; }
-QPushButton#account { background: #111a2e; border: 1px solid #22314f; border-radius: 4px; padding: 5px 10px; }
-"""
 
 COLUMNS = ["Seller", "Status", "Rank", "Price", "Qty", "Rep"]
-STATUS_LABEL = {"ingame": "In game", "online": "Online"}
-STATUS_COLOR = {"ingame": QColor(124, 201, 156), "online": QColor(120, 185, 255)}
-MAX_SUGGESTIONS = 8
-
-
-# Short forms players type in trade chat.
-TYPO_MIN = 70  # per-word similarity needed to count as a typo of that word
-ALIASES = {"bp": "blueprint", "sys": "systems", "neuro": "neuroptics", "chas": "chassis", "rec": "receiver"}
-
-
-def _words(text: str) -> list[str]:
-    return utils.default_process(text).split()
-
-
-def search_catalog(query: str, catalog: Sequence[CatalogItem], limit: int = MAX_SUGGESTIONS) -> list[CatalogItem]:
-    """Shop-style search, best tier first:
-        0  name starts with the query               "prim"        -> Primed ...
-        1  every query word starts a name word, in order   "arcane ener" -> Arcane Energize
-        2  every query word starts a name word, any order
-        3  query appears inside the name
-        4  only when nothing above matched: each word within a typo of a name word ("nekrso" -> Nekros)
-    Ties go to the shorter name ("Serration" before "Spectral Serration"), typos to the closer match.
-    WRatio alone ranked hundreds of names equally and fell back to alphabetical order.
-    """
-    q_words = [ALIASES.get(w, w) for w in _words(query)]
-    if not q_words or len(" ".join(q_words)) < 2:
-        return []
-    q = " ".join(q_words)
-    scored = []
-    for item in catalog:
-        name = " ".join(_words(item.name))
-        n_words = name.split()
-        if name.startswith(q):
-            tier = 0
-        elif _prefix_in_order(q_words, n_words):
-            tier = 1
-        elif all(any(w.startswith(qw) for w in n_words) for qw in q_words):
-            tier = 2
-        elif q in name:
-            tier = 3
-        else:
-            continue
-        scored.append((tier, 0.0, len(name), name, item))
-    if not scored:
-        # Typos only: match each typed word to its closest name word (or the start of one).
-        for item in catalog:
-            n_words = _words(item.name)
-            best = [max(max(fuzz.ratio(qw, w), fuzz.ratio(qw, w[:len(qw) + 1])) for w in n_words) for qw in q_words]
-            if min(best) >= TYPO_MIN:
-                name = " ".join(n_words)
-                scored.append((4, -round(sum(best) / len(best)), len(name), name, item))
-    scored.sort(key=lambda s: s[:4])
-    return [s[4] for s in scored[:limit]]
-
-
-def _prefix_in_order(q_words: list[str], n_words: list[str]) -> bool:
-    i = 0
-    for w in n_words:
-        if i < len(q_words) and w.startswith(q_words[i]):
-            i += 1
-    return i == len(q_words)
 
 
 def item_title(item: CatalogItem) -> str:
@@ -191,7 +112,7 @@ class MarketWindow(QWidget):
         self._toast_timer = QTimer(self, singleShot=True, interval=4000)
         self._toast_timer.timeout.connect(lambda: self.toast.setText(""))
 
-        from .trade_panel import MyOrdersPanel, PostOrderPanel  # imported here: it imports this module's types
+        from .orders import MyOrdersPanel, PostOrderPanel  # imported here: it imports this module's types
 
         self.account_button = QPushButton(objectName="account")
         self.account_button.clicked.connect(self._account_clicked)
@@ -214,10 +135,10 @@ class MarketWindow(QWidget):
 
         self.post_panel = PostOrderPanel(self)
         self.orders_panel = MyOrdersPanel(self)
-        from .trade_history_panel import TradeHistoryPanel
+        from .trades import TradeHistoryPanel
 
         self.trades_panel = TradeHistoryPanel()
-        from .alerts_panel import AlertsPanel
+        from .alerts import AlertsPanel
 
         self.alerts_panel = AlertsPanel(on_changed=self.alerts_changed.emit)
         self.tabs = QTabWidget()
@@ -235,7 +156,7 @@ class MarketWindow(QWidget):
         layout.addWidget(self.toast)
         self._async_done.connect(lambda callback, result: callback(result))
         self.account_changed()
-        from .trade_panel import guard_wheel
+        from .widgets import guard_wheel
 
         self._wheel_guard = guard_wheel(self)  # scrolling over the rank picker changed the rank
 
@@ -377,7 +298,7 @@ class MarketWindow(QWidget):
             self.add_alert(price)
 
     def add_alert(self, price: int) -> None:
-        from .alerts import Alert, add_alert
+        from ..alerts import Alert, add_alert
 
         rank = self.selected_rank()
         alert = Alert(self.item.slug, self.item.name, int(price), rank, self.item.max_rank is not None)
@@ -423,7 +344,7 @@ class MarketWindow(QWidget):
             self.orders_panel.refresh()
 
     def show_sign_in(self) -> None:
-        from .trade_panel import SignInDialog
+        from .orders import SignInDialog
 
         SignInDialog(self).exec()
 

@@ -9,10 +9,10 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
-from . import theme
-from .alerts import Alert, load_alerts, remove_alert
-from .icons import platinum_icon
-from .trade_panel import BUTTON_STYLE, _cell, _table
+from .. import theme
+from ..alerts import Alert, load_alerts, remove_alert
+from ..icons import platinum_icon
+from .widgets import BUTTON_STYLE, make_cell, make_table
 
 
 class AlertsPanel(QWidget):
@@ -24,7 +24,7 @@ class AlertsPanel(QWidget):
         self.on_changed = on_changed
         self.alerts: list[Alert] = []
         theme.follow(self, BUTTON_STYLE)
-        self.table = _table(self.COLUMNS)
+        self.table = make_table(self.COLUMNS)
         self.table.horizontalHeaderItem(self.PRICE).setIcon(QIcon(platinum_icon(14)))
         self.status = QLabel(objectName="muted")
         layout = QVBoxLayout(self)
@@ -38,9 +38,9 @@ class AlertsPanel(QWidget):
         self.alerts = load_alerts()
         self.table.setRowCount(len(self.alerts))
         for row, alert in enumerate(self.alerts):
-            self.table.setItem(row, self.ITEM, _cell(alert.name))
-            self.table.setItem(row, self.RANK, _cell("" if alert.rank is None else str(alert.rank), right=True))
-            self.table.setItem(row, self.PRICE, _cell(str(alert.max_price), right=True, icon=platinum_icon(14)))
+            self.table.setItem(row, self.ITEM, make_cell(alert.name))
+            self.table.setItem(row, self.RANK, make_cell("" if alert.rank is None else str(alert.rank), right=True))
+            self.table.setItem(row, self.PRICE, make_cell(str(alert.max_price), right=True, icon=platinum_icon(14)))
             delete = QPushButton("Delete", objectName="danger")
             delete.setCursor(Qt.CursorShape.PointingHandCursor)
             delete.clicked.connect(lambda _=False, a=alert: self.delete(a))

@@ -19,13 +19,13 @@ from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtWidgets import (QComboBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QPushButton,
                              QTabWidget, QVBoxLayout, QWidget)
 
-from . import theme
-from .icons import ducat_icon, platinum_icon
-from .items import Item
-from .market_window import STYLE
-from .price_cleaner import PriceService
-from .relics import REFINEMENTS, Relic, Reward, chance, load_relics, relic_value, search_relics
-from .trade_panel import BUTTON_STYLE, _cell, _table
+from .. import theme
+from ..icons import ducat_icon, platinum_icon
+from ..items import Item
+from .widgets import STYLE
+from ..price_cleaner import PriceService
+from ..relics import REFINEMENTS, Relic, Reward, chance, load_relics, relic_value, search_relics
+from .widgets import BUTTON_STYLE, make_cell, make_table
 
 log = logging.getLogger(__name__)
 
@@ -73,10 +73,10 @@ class RelicWindow(QWidget):
         self.results.currentTextChanged.connect(self._pick)
         self.title = QLabel(objectName="title")
         self.note = QLabel(objectName="muted", wordWrap=True)
-        self.summary = _table(["Value"] + [r.title() for r in REFINEMENTS])
+        self.summary = make_table(["Value"] + [r.title() for r in REFINEMENTS])
         self.summary.setRowCount(2)
         self.summary.setMaximumHeight(96)
-        self.rewards = _table(["Reward", "Rarity", "Plat", "Ducats", "Intact", "Radiant"])
+        self.rewards = make_table(["Reward", "Rarity", "Plat", "Ducats", "Intact", "Radiant"])
         self.rewards.horizontalHeaderItem(2).setIcon(QIcon(platinum_icon(14)))
         self.rewards.horizontalHeaderItem(3).setIcon(QIcon(ducat_icon(14)))
         detail = QVBoxLayout()
@@ -90,7 +90,7 @@ class RelicWindow(QWidget):
         lookup_layout.addLayout(detail, 1)
 
         # Best unvaulted
-        self.best = _table(["Relic", "Intact", "Radiant", "Radiant ducats"])
+        self.best = make_table(["Relic", "Intact", "Radiant", "Radiant ducats"])
         self.best.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.best.cellDoubleClicked.connect(lambda row, _c: self.show_relic(self.best.item(row, 0).text()))
         self.load_best = QPushButton("Load prices", objectName="primary")
@@ -200,23 +200,23 @@ class RelicWindow(QWidget):
         missing_any = 0
         for row, (label, value_of, icon) in enumerate((("Plat", self.plat_of, platinum_icon(14)),
                                                        ("Ducats", self.ducats_of, ducat_icon(14)))):
-            self.summary.setItem(row, 0, _cell(label, icon=icon))
+            self.summary.setItem(row, 0, make_cell(label, icon=icon))
             for col, refinement in enumerate(REFINEMENTS, start=1):
                 value, missing = relic_value(relic, value_of, refinement, squad)
                 missing_any += missing
-                self.summary.setItem(row, col, _cell(fmt(value, missing), right=True))
+                self.summary.setItem(row, col, make_cell(fmt(value, missing), right=True))
         self.rewards.setRowCount(len(relic.rewards))
         order = sorted(relic.rewards, key=lambda r: ("rare", "uncommon", "common").index(r.rarity)
                        if r.rarity in ("rare", "uncommon", "common") else 3)
         for row, reward in enumerate(order):
             plat = self.plat_of(reward)
             name = reward.name + (f" ×{reward.count}" if reward.count > 1 else "")
-            self.rewards.setItem(row, 0, _cell(name))
-            self.rewards.setItem(row, 1, _cell(reward.rarity.title(), color=RARITY_COLOR.get(reward.rarity)))
-            self.rewards.setItem(row, 2, _cell("…" if plat is None else fmt(plat), right=True))
-            self.rewards.setItem(row, 3, _cell(fmt(self.ducats_of(reward)), right=True))
+            self.rewards.setItem(row, 0, make_cell(name))
+            self.rewards.setItem(row, 1, make_cell(reward.rarity.title(), color=RARITY_COLOR.get(reward.rarity)))
+            self.rewards.setItem(row, 2, make_cell("…" if plat is None else fmt(plat), right=True))
+            self.rewards.setItem(row, 3, make_cell(fmt(self.ducats_of(reward)), right=True))
             for col, refinement in ((4, "intact"), (5, "radiant")):
-                self.rewards.setItem(row, col, _cell(f"{chance(reward.rarity, refinement) * 100:.0f}%", right=True))
+                self.rewards.setItem(row, col, make_cell(f"{chance(reward.rarity, refinement) * 100:.0f}%", right=True))
         how = "best of 4 drops (a squad opening the same relic)" if squad == 4 else "one relic, opened alone"
         self.note.setText(f"Average value per relic: {how}. "
                           + ("* still loading some prices. " if missing_any else "")
@@ -233,10 +233,10 @@ class RelicWindow(QWidget):
         rows.sort(key=lambda r: -r[0])
         self.best.setRowCount(len(rows))
         for row, (radiant, name, intact, ducats, missing) in enumerate(rows):
-            self.best.setItem(row, 0, _cell(name))
-            self.best.setItem(row, 1, _cell(fmt(intact, missing), right=True, icon=platinum_icon(14)))
-            self.best.setItem(row, 2, _cell(fmt(radiant, missing), right=True, icon=platinum_icon(14)))
-            self.best.setItem(row, 3, _cell(fmt(ducats), right=True, icon=ducat_icon(14)))
+            self.best.setItem(row, 0, make_cell(name))
+            self.best.setItem(row, 1, make_cell(fmt(intact, missing), right=True, icon=platinum_icon(14)))
+            self.best.setItem(row, 2, make_cell(fmt(radiant, missing), right=True, icon=platinum_icon(14)))
+            self.best.setItem(row, 3, make_cell(fmt(ducats), right=True, icon=ducat_icon(14)))
         loading = len(self.pending)
         self.best_status.setText(f"{len(rows)} relics drop now. "
                                  + (f"Loading {loading} prices…" if loading else

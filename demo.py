@@ -443,7 +443,7 @@ def stage_market_window(offline: bool) -> Optional[dict]:
     from PyQt6.QtWidgets import QApplication
 
     from voidtrace.items import load_catalog
-    from voidtrace.market_window import MarketWindow
+    from voidtrace.ui.market import MarketWindow
     from voidtrace.sellers import SellerService
 
     app = QApplication.instance() or QApplication([])

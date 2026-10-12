@@ -171,7 +171,7 @@ def _wait(qapp, predicate, timeout=2.0):
 
 
 def _window(catalog, account=None, http=None):
-    from voidtrace.riven_window import RivenWindow
+    from voidtrace.ui.rivens import RivenWindow
 
     if account is None:
         account, http = signed_in()

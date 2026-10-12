@@ -102,7 +102,7 @@ def test_watcher_keeps_going_when_one_item_fails(qapp):
 
 def test_market_window_adds_an_alert(qapp):
     from voidtrace.items import CatalogItem
-    from voidtrace.market_window import MarketWindow
+    from voidtrace.ui.market import MarketWindow
 
     class Acc:
         signed_in = False

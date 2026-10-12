@@ -11,11 +11,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from PyQt6.QtCore import QEvent, QObject, QSize, Qt
+from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtWidgets import (
-    QAbstractItemView,
-    QAbstractSpinBox,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -27,127 +25,21 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QRadioButton,
-    QSpinBox,
     QToolButton,
-    QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from . import theme
-from .account import Account, MarketError, MyOrder, NotSignedIn, TopOrder, suggested_price, top_orders
-from .icons import eye_icon, platinum_icon
+from .. import theme
+from ..account import MarketError, MyOrder, NotSignedIn, TopOrder, suggested_price, top_orders
+from ..icons import eye_icon, platinum_icon
+from .widgets import BUTTON_STYLE, Stepper, make_cell, make_table
 
 if TYPE_CHECKING:
-    from .market_window import MarketWindow
+    from .market import MarketWindow
 
-BUTTON_STYLE = """
-QPushButton { background: #22314f; border: 1px solid #33476e; border-radius: 4px; padding: 6px 12px; }
-QPushButton:hover { background: #2b3d62; }
-QPushButton#primary { background: #4fa3ff; color: #06101f; border: none; font-weight: 600; }
-QPushButton#primary:hover { background: #74b8ff; }
-QPushButton#danger { color: #f08a6e; padding: 3px 10px; }
-QPushButton#small { padding: 3px 10px; }
-QToolButton#eye { background: transparent; border: none; padding: 2px; }
-QToolButton#eye:hover { background: #16213a; border-radius: 4px; }
-QSpinBox { background: #111a2e; border: 1px solid #22314f; border-radius: 4px; padding: 4px 6px; }
-QToolButton#step { background: #22314f; border: 1px solid #33476e; border-radius: 4px; font-weight: 700;
-                   min-width: 26px; min-height: 24px; }
-QToolButton#step:hover { background: #33476e; }
-QToolButton#step:pressed { background: #4fa3ff; color: #06101f; }
-QRadioButton::indicator, QCheckBox::indicator { width: 14px; height: 14px; }
-QRadioButton::indicator { border-radius: 8px; border: 2px solid #5b7099; background: #0b1220; }
-QRadioButton::indicator:hover { border-color: #4fa3ff; }
-QRadioButton::indicator:checked { border: 2px solid #4fa3ff;
-    background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
-                                stop:0 #4fa3ff, stop:0.5 #4fa3ff, stop:0.6 #0b1220, stop:1 #0b1220); }
-"""
 TOP_COLUMNS = ["Player", "Rep", "Price", "Rank", "Qty"]
 STATUS_DOT = {"ingame": QColor(124, 201, 156), "online": QColor(120, 185, 255)}
-
-
-class WheelGuard(QObject):
-    """Dropdowns and number boxes ignore the mouse wheel until clicked.
-
-    Qt changes a hovered dropdown on every wheel notch, so scrolling the window over the price
-    check silently turned Puncture into the next stat in the list, Radiation.
-    """
-
-    def eventFilter(self, obj, event) -> bool:  # noqa: N802 (Qt naming)
-        if event.type() == QEvent.Type.Wheel and not obj.hasFocus():
-            event.ignore()  # lets the window scroll instead
-            return True
-        return False
-
-
-def guard_wheel(root: QWidget) -> WheelGuard:
-    guard = WheelGuard(root)
-    for widget in root.findChildren((QComboBox, QAbstractSpinBox)):
-        widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        widget.installEventFilter(guard)
-    return guard
-
-
-class Stepper(QWidget):
-    """A number box with its own - and + buttons.
-
-    The dark theme's QSpinBox styling made Qt misplace the built-in arrows' click areas: the up
-    arrow drew in one place and listened in another, so it never responded. Typing and the mouse
-    wheel still work on the box itself. Mirrors QSpinBox's value()/setValue()/valueChanged.
-    """
-
-    def __init__(self, minimum: int, maximum: int, value: int, step: int = 1) -> None:
-        super().__init__()
-        self.box = QSpinBox(minimum=minimum, maximum=maximum, value=value)
-        self.box.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
-        self.box.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.box.setMinimumWidth(64)
-        self.minus = QToolButton(text="\u2212", objectName="step")
-        self.plus = QToolButton(text="+", objectName="step")
-        for button, delta in ((self.minus, -step), (self.plus, step)):
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.setAutoRepeat(True)  # hold to keep stepping
-            button.clicked.connect(lambda _=False, d=delta: self.box.setValue(self.box.value() + d))
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-        layout.addWidget(self.minus)
-        layout.addWidget(self.box)
-        layout.addWidget(self.plus)
-        self.valueChanged = self.box.valueChanged
-
-    def value(self) -> int:
-        return self.box.value()
-
-    def setValue(self, value: int) -> None:  # noqa: N802 (Qt naming)
-        self.box.setValue(value)
-
-
-def _table(columns: list[str]) -> QTableWidget:
-    t = QTableWidget(0, len(columns))
-    t.setHorizontalHeaderLabels(columns)
-    t.verticalHeader().hide()
-    t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-    t.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-    t.setShowGrid(False)
-    t.setIconSize(QSize(14, 14))
-    header = t.horizontalHeader()
-    header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-    for c in range(1, len(columns)):
-        header.setSectionResizeMode(c, QHeaderView.ResizeMode.ResizeToContents)
-    return t
-
-
-def _cell(text: str, right: bool = False, icon=None, color: Optional[QColor] = None) -> QTableWidgetItem:
-    item = QTableWidgetItem(text)
-    if right:
-        item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-    if icon is not None:
-        item.setIcon(QIcon(icon))
-    if color is not None:
-        item.setForeground(color)
-    return item
 
 
 class SignInDialog(QDialog):
@@ -228,8 +120,8 @@ class PostOrderPanel(QWidget):
         self.result = QLabel(objectName="toast")
         self.result.setWordWrap(True)
 
-        self.sell_table = _table(TOP_COLUMNS)
-        self.buy_table = _table(TOP_COLUMNS)
+        self.sell_table = make_table(TOP_COLUMNS)
+        self.buy_table = make_table(TOP_COLUMNS)
         for t in (self.sell_table, self.buy_table):
             t.horizontalHeaderItem(2).setIcon(QIcon(platinum_icon(14)))
             t.setMaximumHeight(190)
@@ -316,14 +208,14 @@ class PostOrderPanel(QWidget):
         for table, rows in ((self.sell_table, top["sell"]), (self.buy_table, top["buy"])):
             table.setRowCount(max(1, len(rows)))
             if not rows:
-                table.setItem(0, 0, _cell("Orders not found", color=QColor(143, 163, 194)))
+                table.setItem(0, 0, make_cell("Orders not found", color=QColor(143, 163, 194)))
                 continue
             for r, o in enumerate(rows):
-                table.setItem(r, 0, _cell(f"●  {o.ingame_name}", color=STATUS_DOT.get(o.status)))
-                table.setItem(r, 1, _cell(str(o.reputation), right=True))
-                table.setItem(r, 2, _cell(str(o.platinum), right=True, icon=platinum_icon(14)))
-                table.setItem(r, 3, _cell("" if o.rank is None else str(o.rank), right=True))
-                table.setItem(r, 4, _cell(str(o.quantity), right=True))
+                table.setItem(r, 0, make_cell(f"●  {o.ingame_name}", color=STATUS_DOT.get(o.status)))
+                table.setItem(r, 1, make_cell(str(o.reputation), right=True))
+                table.setItem(r, 2, make_cell(str(o.platinum), right=True, icon=platinum_icon(14)))
+                table.setItem(r, 3, make_cell("" if o.rank is None else str(o.rank), right=True))
+                table.setItem(r, 4, make_cell(str(o.quantity), right=True))
         self.update_price()
 
     def _on_top_failed(self, request: int) -> None:
@@ -389,7 +281,7 @@ class MyOrdersPanel(QWidget):
         self.orders: list[MyOrder] = []
         self.shown: list[MyOrder] = []
         theme.follow(self, BUTTON_STYLE)
-        self.table = _table(self.COLUMNS)
+        self.table = make_table(self.COLUMNS)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(self.EYE, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(self.ITEM, QHeaderView.ResizeMode.Stretch)
@@ -515,13 +407,13 @@ class MyOrdersPanel(QWidget):
                            "Hidden from Warframe.Market. Click to show.")
             eye.clicked.connect(lambda _=False, order=o: self.toggle_visible(order))
             self.table.setCellWidget(r, self.EYE, eye)
-            self.table.setItem(r, self.ITEM, _cell(item.name if item else o.item_id,
+            self.table.setItem(r, self.ITEM, make_cell(item.name if item else o.item_id,
                                                    color=None if o.visible else QColor(143, 163, 194)))
-            self.table.setItem(r, self.TYPE, _cell(o.type.capitalize(),
+            self.table.setItem(r, self.TYPE, make_cell(o.type.capitalize(),
                                                    color=QColor(124, 201, 156) if o.type == "sell" else QColor(120, 185, 255)))
-            self.table.setItem(r, self.RANK, _cell("" if o.rank is None else str(o.rank), right=True))
-            self.table.setItem(r, self.PRICE, _cell(str(o.platinum), right=True, icon=platinum_icon(14)))
-            self.table.setItem(r, self.QTY, _cell(str(o.quantity), right=True))
+            self.table.setItem(r, self.RANK, make_cell("" if o.rank is None else str(o.rank), right=True))
+            self.table.setItem(r, self.PRICE, make_cell(str(o.platinum), right=True, icon=platinum_icon(14)))
+            self.table.setItem(r, self.QTY, make_cell(str(o.quantity), right=True))
             match = self._small_button("Match lowest" if o.type == "sell" else "Match highest")
             match.clicked.connect(lambda _=False, order=o: self.reprice(order))
             delete = self._small_button("Delete", "danger")

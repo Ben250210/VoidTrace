@@ -10,7 +10,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
 from voidtrace import rivens
-from voidtrace.riven_window import RivenWindow, disposition_dots
+from voidtrace.ui.riven_find import disposition_dots
+from voidtrace.ui.rivens import RivenWindow
 from voidtrace.rivens import RivenAttr, RivenDraft, RivenService
 
 FIXTURES = Path(__file__).parent / "fixtures" / "rivens"

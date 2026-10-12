@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QColor, QIcon
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -24,17 +24,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from .account import MarketError, NotSignedIn
-from .icons import eye_icon, platinum_icon
-from .rivens import PriceCheck, RivenAuction, RivenDraft, price_check, valid_names
-from .trade_panel import Stepper, _cell, _table
+from ..account import MarketError, NotSignedIn
+from ..icons import eye_icon, platinum_icon
+from ..rivens import PriceCheck, RivenAuction, RivenDraft, price_check, valid_names
+from .widgets import Stepper, make_cell, make_table
+from .widgets import BUFF_COLOR, CURSE_COLOR, MUTED
 
 if TYPE_CHECKING:
-    from .riven_window import RivenWindow
-
-MUTED = QColor(143, 163, 194)
-BUFF_COLOR = QColor(124, 201, 156)
-CURSE_COLOR = QColor(240, 110, 90)
+    from .rivens import RivenWindow
 
 
 def _error_text(exc: Exception) -> str:
@@ -175,7 +172,7 @@ class MyRivensPanel(QWidget):
         self.auctions: list[RivenAuction] = []
         self.shown: list[RivenAuction] = []
         self.note = ""
-        self.table = _table(self.COLUMNS)
+        self.table = make_table(self.COLUMNS)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(self.EYE, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(self.RIVEN, QHeaderView.ResizeMode.ResizeToContents)
@@ -274,12 +271,12 @@ class MyRivensPanel(QWidget):
                            "Hidden from Warframe.Market. Click to show.")
             eye.clicked.connect(lambda _=False, auction=a: self.toggle_visible(auction))
             self.table.setCellWidget(r, self.EYE, eye)
-            self.table.setItem(r, self.RIVEN, _cell(catalog.riven_title(a), color=None if a.visible else MUTED))
-            self.table.setItem(r, self.BUFFS, _cell("\n".join(catalog.format_attr(x) for x in a.attrs if x.positive),
+            self.table.setItem(r, self.RIVEN, make_cell(catalog.riven_title(a), color=None if a.visible else MUTED))
+            self.table.setItem(r, self.BUFFS, make_cell("\n".join(catalog.format_attr(x) for x in a.attrs if x.positive),
                                                     color=BUFF_COLOR))
-            self.table.setItem(r, self.CURSE, _cell("\n".join(catalog.format_attr(x) for x in a.attrs if not x.positive)
+            self.table.setItem(r, self.CURSE, make_cell("\n".join(catalog.format_attr(x) for x in a.attrs if not x.positive)
                                                     or "none", color=CURSE_COLOR if a.negative else MUTED))
-            self.table.setItem(r, self.PRICE, _cell(str(a.price), right=True, icon=platinum_icon(14)))
+            self.table.setItem(r, self.PRICE, make_cell(str(a.price), right=True, icon=platinum_icon(14)))
             match = self._button("Match lowest")
             match.clicked.connect(lambda _=False, auction=a: self.reprice(auction))
             close = self._button("Close", "danger")

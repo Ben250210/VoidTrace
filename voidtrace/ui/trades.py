@@ -13,10 +13,10 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QHeaderView, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from . import theme
-from .icons import platinum_icon
-from .trade_panel import BUTTON_STYLE, _cell, _table
-from .trades import PLATINUM, TradeHistory, TradeItem, TradeRecord, totals
+from .. import theme
+from ..icons import platinum_icon
+from .widgets import BUTTON_STYLE, make_cell, make_table
+from ..trades import PLATINUM, TradeHistory, TradeItem, TradeRecord, totals
 
 GREEN = QColor("#5ccf8f")
 RED = QColor("#f08a6e")
@@ -50,7 +50,7 @@ class TradeHistoryPanel(QWidget):
         self.records: list[TradeRecord] = []
         self.loaded = False
         theme.follow(self, BUTTON_STYLE)
-        self.table = _table(self.COLUMNS)
+        self.table = make_table(self.COLUMNS)
         self.table.horizontalHeader().setSectionResizeMode(self.ITEMS, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeaderItem(self.PLAT).setIcon(QIcon(platinum_icon(14)))
         self.today = QLabel()
@@ -102,9 +102,9 @@ class TradeHistoryPanel(QWidget):
                 items, side = f"{gave}  ⇄  {got}", "Swapped"
             when = r.time.strftime("%H:%M") if r.time >= midnight else r.time.strftime("%d %b %H:%M")
             plat = r.plat
-            self.table.setItem(row, self.ITEMS, _cell(items))
-            self.table.setItem(row, self.WHEN, _cell(when))
-            self.table.setItem(row, self.PARTNER, _cell(r.trade.partner))
-            self.table.setItem(row, self.SIDE, _cell(side))
-            self.table.setItem(row, self.PLAT, _cell(f"{plat:+d}" if plat else "0", right=True,
+            self.table.setItem(row, self.ITEMS, make_cell(items))
+            self.table.setItem(row, self.WHEN, make_cell(when))
+            self.table.setItem(row, self.PARTNER, make_cell(r.trade.partner))
+            self.table.setItem(row, self.SIDE, make_cell(side))
+            self.table.setItem(row, self.PLAT, make_cell(f"{plat:+d}" if plat else "0", right=True,
                                                      color=GREEN if plat > 0 else RED if plat < 0 else None))
