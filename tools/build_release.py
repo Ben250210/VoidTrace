@@ -71,6 +71,10 @@ SOMETHING WRONG?
 QUIT
   Right-click the tray icon > Quit VoidTrace.
 
+RELICS
+  Tray > Relics: a relic's average plat and ducat value per refinement (solo or squad of 4), its
+  rewards, and the best relics you can farm now.
+
 ACCENT COLOUR
   Right-click the tray icon > Accent colour: pick a preset or any colour.
 

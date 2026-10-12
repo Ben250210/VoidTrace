@@ -144,13 +144,15 @@ def app_icon() -> QIcon:
 
 
 def make_tray(app: QApplication, open_market, game_log_status=lambda: None, open_rivens=None,
-              toggle_riven_popup=None, toggle_trade_updates=None) -> QSystemTrayIcon:
+              toggle_riven_popup=None, toggle_trade_updates=None, open_relics=None) -> QSystemTrayIcon:
     tray = QSystemTrayIcon(app_icon(), app)
     tray.setToolTip("VoidTrace")
     menu = QMenu()
     menu.addAction("Open market (Ctrl+Shift+M)", open_market)
     if open_rivens is not None:
         menu.addAction("Rivens (Ctrl+Shift+R)", open_rivens)
+    if open_relics is not None:
+        menu.addAction("Relics (which to open)", open_relics)
     if toggle_riven_popup is not None:
         popup_action = menu.addAction("Riven popup in Cycle / Item Details")
         popup_action.setCheckable(True)
@@ -287,8 +289,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     overlay = OverlayWindow(screen.geometry(), screen.devicePixelRatio(), args.ui_scale, int(args.hide_after * 1000))
 
     log.info("loading item list...")
+    reward_items = load_items()
     pipeline = RewardPipeline(
-        EntityResolver(load_items()),
+        EntityResolver(reward_items),
         PriceService(),
         capture=lambda: capture_screen(args.monitor),
         players=args.players,
@@ -332,6 +335,19 @@ def main(argv: Optional[list[str]] = None) -> int:
         rivens.raise_()
         rivens.activateWindow()
         rivens.search.setFocus()
+
+    relics_window = None
+
+    def open_relics() -> None:
+        nonlocal relics_window
+        if relics_window is None:
+            from voidtrace.relic_window import RelicWindow
+
+            relics_window = RelicWindow(reward_items, pipeline.prices)
+        relics_window.show()
+        relics_window.raise_()
+        relics_window.activateWindow()
+        relics_window.search.setFocus()
 
     def riven_hotkey() -> None:
         """Ctrl+Shift+R: in game, read the riven on screen (Item Details view); else just open the window."""
@@ -401,7 +417,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return ("FAIL: using the slower log file: another program (WFInfo, Overwolf, DebugView) "
                 "was reading the game's log when VoidTrace started")
 
-    tray = make_tray(app, open_market, game_log_status, open_rivens, toggle_riven_popup, toggle_trade_updates)
+    tray = make_tray(app, open_market, game_log_status, open_rivens, toggle_riven_popup, toggle_trade_updates,
+                     open_relics)
     riven_watcher.start()
     tray.showMessage("VoidTrace is running",
                      "Prices appear on relic reward screens (Borderless Fullscreen). Ctrl+Shift+M opens the market.",
@@ -466,6 +483,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         riven_assistant.shutdown()
         trades.shutdown()
         alert_watcher.shutdown()
+        if relics_window is not None:
+            relics_window.shutdown()
         if rivens is not None:
             rivens.shutdown()
         hotkey.unregister()

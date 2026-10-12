@@ -112,6 +112,15 @@ token. The password is sent only to api.warframe.market and never stored; the to
 Windows Credential Manager (`keyring`) and removed by **Sign out**. Nothing is posted automatically;
 the only automatic change is lowering an order after a trade (above).
 
+## Relic planner
+
+Tray > **Relics (which to open)**. Search a relic (`axi a1`) or a reward (`nikana prime`) to see its
+average value in plat and ducats at Intact, Exceptional, Flawless and Radiant, and its 6 rewards with
+their prices and chances. Pick *Squad of 4* to value the best of 4 drops. **Best unvaulted** lists the
+relics that drop now, sorted by Radiant value (*Load prices* fetches them; about a minute the first
+time, then cached). Relic contents come from Warframe's Public Export and vaulting from
+Warframe.Market: `python tools/update_relics.py` refreshes `voidtrace/data/relics.json`.
+
 ## Price alerts
 
 Open an item in the market window and click **Alert me…**: pick a price (it starts one below the
