@@ -79,7 +79,7 @@ ONLINE STATUS (optional, off by default)
 
 DISCORD (optional)
   Sidebar > Discord: paste a webhook link from your own Discord server (Server Settings >
-  Integrations > Webhooks) to get new whispers, price alerts and trades there.
+  Integrations > Webhooks) to get price alerts and trades there.
 
 SOMETHING WRONG?
   Right-click the tray icon > "Run self-test". It checks OCR, the internet connection and the game log.

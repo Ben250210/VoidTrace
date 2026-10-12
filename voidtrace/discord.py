@@ -1,5 +1,5 @@
-"""Send VoidTrace notices to your own Discord channel through a webhook: new whispers, price alerts
-and finished trades.
+"""Send VoidTrace notices to your own Discord channel through a webhook: price alerts and
+finished trades. (Whispers are not in the game's log, so they cannot be sent.)
 
 You make the webhook in Discord (Server Settings > Integrations > Webhooks > New Webhook > Copy
 Webhook URL) and paste it in VoidTrace (sidebar > Discord). Anyone with that link can post to the
@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 KEYRING_SERVICE = "VoidTrace"
 KEYRING_KEY = "discord webhook"
-KINDS = {"whispers": "New whispers", "alerts": "Price alerts", "trades": "Finished trades"}
+KINDS = {"alerts": "Price alerts", "trades": "Finished trades"}
 WEBHOOK_RE = re.compile(r"^https://(?:(?:ptb|canary)\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+$")
 
 

@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import QApplication
 from tests.test_account import MemoryKeyring
 from voidtrace import settings
 from voidtrace.discord import DiscordNotifier, is_webhook
-from voidtrace.whispers import WhisperReader
 
 URL = "https://discord.com/api/webhooks/123456789/abcDEF_-xyz"
 
@@ -55,7 +54,7 @@ def test_webhook_links():
 
 def test_send_posts_one_embed(qapp):
     post = FakePost()
-    notifier(post).send("whispers", "New conversation", "with **Tenno**")
+    notifier(post).send("alerts", "New conversation", "with **Tenno**")
     ((url, body),) = post.calls
     assert url == URL
     assert body["username"] == "VoidTrace"
@@ -95,33 +94,6 @@ def test_link_lives_in_the_keyring_not_settings(qapp, tmp_path):
     assert n.url() is None
     with pytest.raises(ValueError):
         n.set_url("https://example.com/not-a-webhook")
-
-
-# --- whispers -------------------------------------------------------------------------------------
-
-LOGIN = """\
-82.218 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: C5b4d14832183db8be609a693 to index 1
-82.219 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: A5e752c649b904327c227e41d to index 2
-82.220 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Q_EN_AS to index 3
-87.793 Script [Info]: ChatRedux.lua: CHATREDUX - SessionID: 6acc71ab44e2c1c26002aea2
-87.793 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: S6acc71ab44e2c1c26002aea2 to index 1
-88.100 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: OldFriend to index 6
-""".splitlines()
-
-
-def read(lines):
-    reader = WhisperReader()
-    return [name for name in map(reader.feed, lines) if name]
-
-
-def test_login_tabs_are_not_new_whispers():
-    assert read(LOGIN) == []
-
-
-def test_new_whisper_tab_is_announced_once():
-    later = ["400.500 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Kosmo_99 to index 7",
-             "420.000 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Kosmo_99 to index 7"]
-    assert read(LOGIN + later) == ["Kosmo_99"]
 
 
 def test_settings_panel_saves_and_removes_the_link(qapp):

@@ -296,7 +296,6 @@ def main(argv: Optional[list[str]] = None) -> int:
             return riven_data_cache["catalog"], riven_data_cache["service"]
 
     from voidtrace.discord import DiscordNotifier
-    from voidtrace.whispers import WhisperWatcher
 
     discord = DiscordNotifier()
     window = MainWindow(market, RelicSection(reward_items, pipeline.prices), riven_data,
@@ -402,13 +401,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         discord.send("alerts", f"\U0001f514 {alert.label}: {seller.platinum}p",
                      f"from **{seller.ingame_name}**\n`{pending_whisper['text']}`")
 
-    whispers = WhisperWatcher()
-
-    def new_whisper(name: str) -> None:
-        tray.showMessage("New whisper", f"New conversation with {name}", app_icon(), 8000)
-        discord.send("whispers", "\U0001f4ac New conversation", f"with **{name}**")
-
-    whispers.new_conversation.connect(new_whisper)
 
     def tray_message_clicked() -> None:
         text = pending_whisper.pop("text", None)
@@ -440,7 +432,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     else:
         path = args.path or default_log_path()
         watcher = LogWatcher(path, on_event=controller.on_log_event, source=make_line_source(args.source, path),
-                             on_line=lambda line: (trades.feed(line), whispers.feed(line)))
+                             on_line=trades.feed)
         watcher.start()
         log.info("watching for relic reward screens")
 
