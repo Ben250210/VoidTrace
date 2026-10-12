@@ -32,10 +32,10 @@ class SellerOrder:
 
 def whisper_text(seller: SellerOrder, item_name: str, ranked: bool = False) -> str:
     """The message warframe.market copies for a buy, e.g.
-    /w Kosmo Hi! I want to buy: "Primed Continuity (rank 10)" for 45 platinum. (warframe.market)
+    /w Kosmo Hi! I want to buy: "Primed Continuity (rank 10)" for 45 platinum. (warframe.market through VoidTrace)
     """
     label = f"{item_name} (rank {seller.rank})" if ranked and seller.rank is not None else item_name
-    return f'/w {seller.ingame_name} Hi! I want to buy: "{label}" for {seller.platinum} platinum. (warframe.market)'
+    return f'/w {seller.ingame_name} Hi! I want to buy: "{label}" for {seller.platinum} platinum. (warframe.market through VoidTrace)'
 
 
 def parse_sellers(orders: Sequence[dict], rank: Optional[int] = None, include_online: bool = True) -> list[SellerOrder]:

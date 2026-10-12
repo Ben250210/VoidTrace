@@ -39,13 +39,13 @@ def qapp():
 def test_whisper_for_unranked_item():
     s = SellerOrder("Kosmo", "ingame", 5, 1, None, 12, "")
     assert whisper_text(s, "Burston Prime Blueprint") == \
-        '/w Kosmo Hi! I want to buy: "Burston Prime Blueprint" for 5 platinum. (warframe.market)'
+        '/w Kosmo Hi! I want to buy: "Burston Prime Blueprint" for 5 platinum. (warframe.market through VoidTrace)'
 
 
 def test_whisper_for_ranked_mod_includes_rank():
     s = SellerOrder("Ayla_09", "online", 45, 3, 10, 49, "")
     assert whisper_text(s, "Primed Continuity", ranked=True) == \
-        '/w Ayla_09 Hi! I want to buy: "Primed Continuity (rank 10)" for 45 platinum. (warframe.market)'
+        '/w Ayla_09 Hi! I want to buy: "Primed Continuity (rank 10)" for 45 platinum. (warframe.market through VoidTrace)'
 
 
 def test_whisper_rank_zero_is_still_written():
@@ -217,7 +217,7 @@ def test_clicking_a_seller_copies_the_whisper(qapp):
     assert "max rank 10" in window.title.text()
     window.copy_row(1)
     assert QApplication.clipboard().text() == \
-        '/w Ayla_09 Hi! I want to buy: "Primed Continuity (rank 10)" for 48 platinum. (warframe.market)'
+        '/w Ayla_09 Hi! I want to buy: "Primed Continuity (rank 10)" for 48 platinum. (warframe.market through VoidTrace)'
     assert "Ayla_09" in window.toast.text()
     window.shutdown()
 
@@ -229,7 +229,7 @@ def test_unranked_item_hides_rank_controls(qapp):
     assert not window.rank.isVisibleTo(window)
     assert window.table.isColumnHidden(2)
     window.copy_row(0)
-    assert QApplication.clipboard().text().endswith('"Burston Prime Blueprint" for 4 platinum. (warframe.market)')
+    assert QApplication.clipboard().text().endswith('"Burston Prime Blueprint" for 4 platinum. (warframe.market through VoidTrace)')
     window.shutdown()
 
 
