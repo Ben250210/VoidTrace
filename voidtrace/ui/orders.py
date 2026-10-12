@@ -33,7 +33,7 @@ from PyQt6.QtWidgets import (
 from .. import theme
 from ..account import MarketError, MyOrder, NotSignedIn, TopOrder, suggested_price, top_orders
 from ..icons import eye_icon, platinum_icon
-from .widgets import BUTTON_STYLE, STYLE, Stepper, make_cell, make_table
+from .widgets import BUTTON_STYLE, STYLE, Stepper, make_cell, make_table, set_rows
 
 if TYPE_CHECKING:
     from .market import MarketSection
@@ -206,7 +206,7 @@ class PostOrderPanel(QWidget):
             return
         self.top = top
         for table, rows in ((self.sell_table, top["sell"]), (self.buy_table, top["buy"])):
-            table.setRowCount(max(1, len(rows)))
+            set_rows(table, max(1, len(rows)))
             if not rows:
                 table.setItem(0, 0, make_cell("Orders not found", color=QColor(143, 163, 194)))
                 continue
@@ -394,7 +394,7 @@ class MyOrdersPanel(QWidget):
                 if old is not None:
                     old.hide()
         self.table.setRowCount(0)
-        self.table.setRowCount(len(self.shown))
+        set_rows(self.table, len(self.shown))
         widths = {self.MATCH: 0, self.DELETE: 0}
         row_h = 0
         for r, o in enumerate(self.shown):

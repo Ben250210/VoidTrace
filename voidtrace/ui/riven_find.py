@@ -32,7 +32,7 @@ from ..rivens import (
     riven_grade,
     riven_whisper,
 )
-from .widgets import make_cell, make_table
+from .widgets import make_cell, make_table, set_rows
 from .widgets import BUFF_COLOR, CURSE_COLOR, STATUS_COLOR, STATUS_LABEL
 
 
@@ -92,7 +92,7 @@ def grade_color(value: Optional[int]) -> Optional[QColor]:
 
 def fill_auction_table(table: QTableWidget, catalog: RivenCatalog, auctions: list[RivenAuction]) -> None:
     table.setRowCount(0)
-    table.setRowCount(len(auctions))
+    set_rows(table, len(auctions))
     plat = platinum_icon(14)
     for r, a in enumerate(auctions):
         buffs = "\n".join(catalog.format_attr(x) for x in a.attrs if x.positive)

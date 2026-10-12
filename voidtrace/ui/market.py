@@ -36,7 +36,7 @@ from ..icons import platinum_icon
 from ..items import CatalogItem
 from ..sellers import SellerOrder, SellerService, rank_counts, whisper_text
 from ..search import search_catalog
-from .widgets import STATUS_COLOR, STATUS_LABEL, Section
+from .widgets import STATUS_COLOR, STATUS_LABEL, Section, set_rows
 
 log = logging.getLogger(__name__)
 
@@ -220,7 +220,7 @@ class MarketSection(Section):
         if self.item is not None and self.item.max_rank is not None and self.selected_rank() is None:
             self._label_ranks(rank_counts(rows))
         self.rows = rows
-        self.table.setRowCount(len(rows))
+        set_rows(self.table, len(rows))
         dim = QColor(104, 118, 145)
         for r, s in enumerate(rows):
             cells = [s.ingame_name, STATUS_LABEL.get(s.status, s.status), "" if s.rank is None else str(s.rank),

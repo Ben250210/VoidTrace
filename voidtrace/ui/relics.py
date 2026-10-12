@@ -22,7 +22,7 @@ from ..icons import chest_icon, ducat_icon, platinum_icon
 from ..items import Item
 from ..price_cleaner import PriceService
 from ..relics import ERAS, REFINEMENTS, Relic, Reward, chance, load_relics, relic_value, search_relics
-from .widgets import Section, make_cell, make_table
+from .widgets import Section, make_cell, make_table, set_rows
 
 log = logging.getLogger(__name__)
 
@@ -224,7 +224,7 @@ class RelicTablePage(QWidget):
         chest = QIcon(chest_icon(32, self.vaulted))
         tip = "Vaulted: no longer drops" if self.vaulted else "Drops now"
         self.table.setUpdatesEnabled(False)  # one repaint for the whole table, not one per cell
-        self.table.setRowCount(len(self.rows))
+        set_rows(self.table, len(self.rows))
         for i, row in enumerate(known + unknown):
             relic = row["relic"]
             chest_cell = make_cell("")
@@ -334,7 +334,7 @@ class RelicLookupPage(QWidget):
                 value, missing = relic_value(relic, value_of, refinement, squad)
                 missing_any += missing
                 self.summary.setItem(row, col, make_cell(fmt(value, missing), right=True))
-        self.rewards.setRowCount(len(relic.rewards))
+        set_rows(self.rewards, len(relic.rewards))
         order = sorted(relic.rewards, key=lambda r: ("rare", "uncommon", "common").index(r.rarity)
                        if r.rarity in ("rare", "uncommon", "common") else 3)
         for row, reward in enumerate(order):

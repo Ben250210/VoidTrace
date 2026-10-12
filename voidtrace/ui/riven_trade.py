@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 from ..account import MarketError, NotSignedIn
 from ..icons import eye_icon, platinum_icon
 from ..rivens import PriceCheck, RivenAuction, RivenDraft, price_check, valid_names
-from .widgets import Stepper, make_cell, make_table
+from .widgets import Stepper, make_cell, make_table, set_rows
 from .widgets import BUFF_COLOR, CURSE_COLOR, MUTED
 
 if TYPE_CHECKING:
@@ -259,7 +259,7 @@ class MyRivensPanel(QWidget):
                 if old is not None:
                     old.hide()
         self.table.setRowCount(0)
-        self.table.setRowCount(len(self.shown))
+        set_rows(self.table, len(self.shown))
         catalog = self.window_.catalog
         widths = {self.MATCH: 0, self.CLOSE: 0}
         for r, a in enumerate(self.shown):

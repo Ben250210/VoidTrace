@@ -150,6 +150,13 @@ def make_table(columns: list[str]) -> QTableWidget:
     return t
 
 
+def set_rows(table: QTableWidget, count: int) -> None:
+    """Size `table` for a refill. Emptying it first matters: refilling rows that still hold text made
+    the fit-to-contents columns re-measure every row for each new cell (752 relics froze the window)."""
+    table.setRowCount(0)
+    table.setRowCount(count)
+
+
 def make_cell(text: str, right: bool = False, icon=None, color: Optional[QColor] = None) -> QTableWidgetItem:
     item = QTableWidgetItem(text)
     if right:

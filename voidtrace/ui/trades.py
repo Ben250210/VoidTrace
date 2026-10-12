@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QHeaderView, QLabel, QPushButton, QVBox
 
 from .. import theme
 from ..icons import platinum_icon
-from .widgets import BUTTON_STYLE, make_cell, make_table
+from .widgets import BUTTON_STYLE, make_cell, make_table, set_rows
 from ..trades import PLATINUM, TradeHistory, TradeItem, TradeRecord, totals
 
 GREEN = QColor("#5ccf8f")
@@ -91,7 +91,7 @@ class TradeHistoryPanel(QWidget):
         self.week.setText(totals_text("Last 7 days", self.records, now - timedelta(days=7)))
         self.all_time.setText(totals_text("All time", self.records, None))
         rows = list(reversed(self.records))
-        self.table.setRowCount(len(rows))
+        set_rows(self.table, len(rows))
         for row, r in enumerate(rows):
             gave, got = items_text(r.trade.gave), items_text(r.trade.got)
             if got == "—":

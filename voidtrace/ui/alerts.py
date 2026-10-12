@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 from .. import theme
 from ..alerts import Alert, load_alerts, remove_alert
 from ..icons import platinum_icon
-from .widgets import BUTTON_STYLE, make_cell, make_table
+from .widgets import BUTTON_STYLE, make_cell, make_table, set_rows
 
 
 class AlertsPanel(QWidget):
@@ -36,7 +36,7 @@ class AlertsPanel(QWidget):
 
     def refresh(self) -> None:
         self.alerts = load_alerts()
-        self.table.setRowCount(len(self.alerts))
+        set_rows(self.table, len(self.alerts))
         for row, alert in enumerate(self.alerts):
             self.table.setItem(row, self.ITEM, make_cell(alert.name))
             self.table.setItem(row, self.RANK, make_cell("" if alert.rank is None else str(alert.rank), right=True))

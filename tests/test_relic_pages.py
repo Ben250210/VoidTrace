@@ -233,3 +233,24 @@ def test_prices_arriving_fast_redraw_at_most_once_per_interval(qapp):
     assert timer.isActive() and timer.interval() >= 1000  # one redraw later, not one per price
     timer.timeout.emit()
     assert redraws == [1]
+
+
+def test_refilling_a_full_table_stays_fast(qapp):
+    """Refilling a table that already had rows re-measured every row for each new cell: 200 rows took
+    13 s, 752 froze the window for minutes."""
+    import time
+
+    from voidtrace.relics import load_relics
+    from voidtrace.ui.relics import RelicPrices, RelicTablePage
+
+    page = RelicTablePage(True, RelicPrices([], None), [r for r in load_relics() if r.vaulted][:200], lambda: 1)
+    page.resize(1000, 600)
+    page.show()
+    qapp.processEvents()
+    page.render()
+    qapp.processEvents()
+    started = time.perf_counter()
+    page.render()
+    qapp.processEvents()
+    assert time.perf_counter() - started < 1.0
+    page.close()
