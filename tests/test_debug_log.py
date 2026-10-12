@@ -1,4 +1,5 @@
 import struct
+import time
 
 from voidtrace.debug_log import BUFFER_SIZE, DebugLogSource, parse_message
 
@@ -17,7 +18,10 @@ class FakeChannel:
         self.closed = False
 
     def wait(self, timeout_ms):
-        return self.messages.pop(0) if self.messages else None
+        if self.messages:
+            return self.messages.pop(0)
+        time.sleep(timeout_ms / 1000)  # like the real channel: block until the timeout
+        return None
 
     def close(self):
         self.closed = True
@@ -56,6 +60,20 @@ def test_no_messages_returns_empty_and_close_releases_channel():
     channel = FakeChannel([])
     src = DebugLogSource(pid_finder=lambda: WARFRAME_PID, channel_factory=lambda: channel)
     assert src.poll() == []
+    src.close()
+    assert channel.closed
+
+
+def test_game_is_released_even_while_nobody_polls():
+    """Warframe waits after every log line until it is collected. Collecting must not depend on the
+    log thread calling poll(): while it handles a batch (or Python is busy), the game would freeze."""
+    channel = FakeChannel([raw(WARFRAME_PID, f"{i}.0 Script [Info]: line {i}\n") for i in range(50)])
+    src = DebugLogSource(pid_finder=lambda: WARFRAME_PID, channel_factory=lambda: channel)
+    deadline = time.monotonic() + 2
+    while channel.messages and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert channel.messages == []  # all collected without a single poll()
+    assert len(src.poll()) == 50  # and nothing was lost
     src.close()
     assert channel.closed
 

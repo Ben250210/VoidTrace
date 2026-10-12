@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import queue
 import struct
 import sys
 import threading
@@ -156,7 +157,12 @@ class _Win32Channel:
 
 
 class DebugLogSource:
-    """Line source with the same shape as LogTailer: poll() and lines(stop_event)."""
+    """Line source with the same shape as LogTailer: poll() and lines(stop_event).
+
+    Every program that writes debug output (Warframe included) waits after each message until the
+    listener has taken it. So a dedicated thread does nothing but take messages and queue them;
+    parsing and everything else happen in poll(). Without it the game froze while VoidTrace was
+    busy (handling a batch, starting up)."""
 
     blocks = True  # poll() waits up to poll_interval itself; callers need not sleep
 
@@ -173,6 +179,16 @@ class DebugLogSource:
         self._pid_checked = 0.0
         self._partial = ""
         self.messages_seen = 0
+        self._queue: queue.SimpleQueue[bytes] = queue.SimpleQueue()
+        self._stop = threading.Event()
+        self._collector = threading.Thread(target=self._collect, name="VoidTrace-DebugOutput", daemon=True)
+        self._collector.start()
+
+    def _collect(self) -> None:
+        while not self._stop.is_set():
+            raw = self._channel.wait(200)
+            if raw is not None:
+                self._queue.put(raw)
 
     def _warframe_pid(self) -> Optional[int]:
         now = time.monotonic()
@@ -186,9 +202,9 @@ class DebugLogSource:
         out: list[str] = []
         deadline = time.monotonic() + self.poll_interval
         while True:
-            remaining_ms = max(0, int((deadline - time.monotonic()) * 1000))
-            raw = self._channel.wait(remaining_ms)
-            if raw is None:
+            try:
+                raw = self._queue.get(timeout=max(0.0, deadline - time.monotonic()))
+            except queue.Empty:
                 break
             pid, text = parse_message(raw)
             if pid != self._warframe_pid():
@@ -204,4 +220,6 @@ class DebugLogSource:
             yield from self.poll()
 
     def close(self) -> None:
+        self._stop.set()
+        self._collector.join(1.0)
         self._channel.close()
